@@ -4,8 +4,6 @@ const globalSearch = async (req, res) => {
   try {
     const filters = req.body;
 
-    console.log("Filtros de búsqueda global:", filters);
-
     const results = await globalSearchService.searchAll(filters);
 
     res.json({
@@ -23,6 +21,28 @@ const globalSearch = async (req, res) => {
   }
 };
 
+const getPropertyById = async (req, res) => {
+  try {
+    const { propertyId } = req.params;
+
+    const result = await globalSearchService.getPropertyById(propertyId);
+
+    res.json({
+      success: true,
+      message: "Propiedad encontrada exitosamente",
+      data: result,
+    });
+  } catch (error) {
+    console.error("Error en get Property By Id:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error al buscar la propiedad",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
 module.exports = {
   globalSearch,
+  getPropertyById,
 };

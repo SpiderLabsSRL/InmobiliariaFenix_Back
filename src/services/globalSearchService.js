@@ -178,6 +178,75 @@ const searchAll = async (filters) => {
   }
 };
 
+const getPropertyById = async (propertyId) => {
+  try {
+    let propertyQuery = `
+      SELECT
+        i.idinmueble as id,
+        i.titulo as title,
+        i.descripcion as description,
+        i.precio_capatacion_s as price,
+        i.precio_captacion_i as "idealPrice",
+        i.operacion as type,
+        i.tipo_propiedad as "propertyType",
+        i.condicion as condition,
+        i.direccion as address,
+        i.m2_construccion as "sqMeters",
+        i.m2_terreno as "sqMetersLand",
+        i.nro_pisos as "numberOfFloors",
+        i.nro_habitaciones as bedrooms,
+        i.nro_baños as bathrooms,
+        i.nro_estacionamiento as "parkingSpots",
+        i.ascensor as "hasElevator",
+        i.garaje as "hasGarage",
+        i.terraza as "hasTerrace",
+        i.piscina as "hasPool",
+        i.año_construccion as "yearBuilt",
+        i.latitud as lat,
+        i.longitud as lng,
+        i.estado as status,
+        i.observacion as observations,
+        i.fecha_creacion as "capturedDate",
+        i.enlace_video as "enlace_video",
+        i.porcentajeComision as "porcentajeComision",
+        i.nombre_propietario as "nombre_propietario",
+        i.celular_propietario as "celular_propietario",
+        i.idmunicipio as "idmunicipio",
+        i.precio_metro_construccion as "precio_m2_construccion",
+        i.porcentajeDepreciacion as "porcentaje_depreciacion",
+        i.porcentaje_venta as "porcentaje_venta",
+        i.porcentaje_captacion as "porcentaje_captacion",
+        i.es_exclusivo as "es_exclusivo",
+        a.nombre as "agentName",
+        a.idagente as "agentId",
+        m.nombre as city,
+        p.nombre as province,
+        d.nombre as department,
+        (
+          SELECT json_agg(
+            CONCAT('/inmuebles/', i.idinmueble, '/images/', ii.idimagen, '?t=', EXTRACT(EPOCH FROM NOW()))
+          )
+          FROM imagen_inmueble ii 
+          WHERE ii.idinmueble = i.idinmueble
+        ) as images
+      FROM inmueble i
+      LEFT JOIN agente a ON i.idagente = a.idagente
+      LEFT JOIN municipio m ON i.idmunicipio = m.idmunicipio
+      LEFT JOIN provincia p ON m.idprovincia = p.idprovincia
+      LEFT JOIN departamento d ON p.iddepartamento = d.iddepartamento
+      WHERE (i.estado = 'activo' OR i.estado = 'reservado') AND i.idinmueble = $1
+      GROUP BY i.idinmueble, a.nombre, a.idagente, m.nombre, p.nombre, d.nombre LIMIT 1
+    `;
+    const propertyResult = await query(propertyQuery, [propertyId]);
+
+    return propertyResult.rows[0];
+  } catch (error) {
+    console.error("Error en globalSearchService:", error);
+    throw error;
+  }
+}
+
 module.exports = {
   searchAll,
+  getPropertyById,
 };
