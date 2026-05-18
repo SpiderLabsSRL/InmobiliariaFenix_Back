@@ -62,6 +62,9 @@ app.use("/api/crm", crmManagementRoutes);
 const acmRoutes = require("./src/routes/acmRoutes");
 app.use("/api/acm", acmRoutes);
 
+const globalSearchRoutes = require("./src/routes/globalSearchRoutes");
+app.use("/api/global-search", globalSearchRoutes);
+
 const sidebarRoutes = require("./src/routes/sidebarRoutes");
 app.use("/api/agentes", sidebarRoutes);
 
