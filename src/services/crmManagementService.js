@@ -209,7 +209,7 @@ const getPropertyById = async (id, user) => {
       getPriceChangesByProperty(id),
       getOffersByProperty(id),
     ]);
-		const timeline = await getTimelineByProperty(id, priceChanges, offers);
+		const timeline = await getTimelineByProperty(id, priceChanges, offers, property);
     
     let filteredOffers;
     if(property.agentId == user.idagente)
@@ -581,22 +581,16 @@ const getPriceChangesByProperty = async (propertyId) => {
   }
 };
 
-const getTimelineByProperty = async (propertyId, priceChanges, offers) => {
+const getTimelineByProperty = async (propertyId, priceChanges, offers, property) => {
   try {
     const timeline = [];
-
-    const propertyResult = await query(
-      `SELECT fecha_creacion as date, titulo as title, idagente as "agentId"
-       FROM inmueble WHERE idinmueble = $1`,
-      [propertyId]
-    );
     
-    if (propertyResult.rows.length > 0) {
-      const prop = propertyResult.rows[0];
+    if (property) {
+      const prop = property;
       timeline.push({
         id: `captacion-${propertyId}`,
         propertyId,
-        date: prop.date,
+        date: prop.capturedDate,
         type: "captacion",
         title: "Propiedad captada",
         description: `Propiedad "${prop.title}" fue captada`,
