@@ -533,7 +533,8 @@ const updateOfferStatus = async (offerId, propertyId, status, reason, user) => {
         `
         UPDATE oferta_inmueble
         SET estado = $1,
-            motivo_rechazo = $2
+            motivo_rechazo = $2,
+            fecha_rechazo = timezone('America/La_Paz', NOW())
         WHERE idoferta = $3
             AND idinmueble = $4
         `,
