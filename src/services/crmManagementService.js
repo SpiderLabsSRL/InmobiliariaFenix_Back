@@ -352,21 +352,24 @@ const getOffersByProperty = async (propertyId) => {
     const result = await query(
       `
       SELECT 
-        idoferta as id,
-        idinmueble as "propertyId",
-        fecha_oferta as date,
-        fecha_rechazo as "rejectedDate",
-        fecha_aceptacion as "aceptedDate",
-        monto_oferta as amount,
-        nombre_ofertante as "offeredBy",
-        monto_seña as "depositAmount",
-        estado as "status",
-        motivo_rechazo as "declineReason",
-        idoferta_padre as "originalOfferId",
-        idagente_responsable
-      FROM oferta_inmueble 
-      WHERE idinmueble = $1
-      ORDER BY fecha_oferta DESC
+        o.idoferta as id,
+        o.idinmueble as "propertyId",
+        o.fecha_oferta as date,
+        o.fecha_rechazo as "rejectedDate",
+        o.fecha_aceptacion as "aceptedDate",
+        o.monto_oferta as amount,
+        o.nombre_ofertante as "offeredBy",
+        o.monto_seña as "depositAmount",
+        o.estado as "status",
+        o.motivo_rechazo as "declineReason",
+        o.idoferta_padre as "originalOfferId",
+        o.idagente_responsable,
+        a.nombre as "agentName",
+        a.telefono as "agentPhone"
+      FROM oferta_inmueble o
+      LEFT JOIN agente a ON o.idagente_responsable = a.idagente
+      WHERE o.idinmueble = $1
+      ORDER BY o.fecha_oferta DESC
       `,
       [propertyId]
     );
