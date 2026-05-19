@@ -7,33 +7,28 @@ const canEditPropertyPrice = async (agentId, user) => {
     return true;
   }
   
-  if (user.rol === 'team_leader') {
-    try {
-      const result = await query(
-        `SELECT EXISTS(
-          SELECT 1 
-          FROM agente a1
-          JOIN agente a2 ON a1.idgrupo = a2.idgrupo
-          WHERE a1.idagente = $1 
-            AND a2.idagente = $2
-            AND a1.idgrupo IS NOT NULL
-        ) AS same_group`,
-        [user.idagente, agentId]
-      );
-
-      return result.rows[0].same_group;
-    } catch (error) {
-      console.error("Error verificando permisos de team_leader:", error);
-      return false;
-    }
-  }
-  
   if (user.rol === 'agente') {
     return user.idagente === agentId;
   }
   
   return false;
 };
+
+const isPropertyRecivingOffers = async (propertyId) => {
+  const isRecivingOffer = await query(
+    `
+    SELECT COUNT(*) as aceptado
+    FROM oferta_inmueble
+    WHERE estado = 'aceptado' AND idinmueble = $1
+    `,
+    [propertyId]
+  );
+
+  if (isRecivingOffer.rows[0].aceptado == 1){
+    return false;
+  }
+  return true;
+}
 
 const getProperty = async (id) => {
   try {
@@ -76,7 +71,12 @@ const getProperty = async (id) => {
         i.idmunicipio,
         i.porcentajeComision as "porcentajeComision",
         i.precio_capatacion_m as "minPrice",
-        i.precio_captacion_i as "idealPrice"
+        i.precio_captacion_i as "idealPrice",
+        i.nombre_contacto_secundario as "nombre_contacto_secundario",
+        i.celular_contacto_secundario as "celular_contacto_secundario",
+        i.porcentaje_venta as "porcentajeVenta",
+        i.porcentaje_captacion as "porcentajeCaptacion",
+        i.es_exclusivo as "esExclusivo"
       FROM inmueble i
       LEFT JOIN agente a ON i.idagente = a.idagente
       LEFT JOIN municipio m ON i.idmunicipio = m.idmunicipio
@@ -139,7 +139,12 @@ const getProperties = async (filters = {}) => {
         i.porcentajeComision as "porcentajeComision",
         i.precio_capatacion_m as "minPrice",
         i.precio_captacion_i as "idealPrice",
-        i.fecha_creacion as "createdDate"
+        i.fecha_creacion as "createdDate",
+        i.nombre_contacto_secundario as "nombre_contacto_secundario",
+        i.celular_contacto_secundario as "celular_contacto_secundario",
+        i.porcentaje_venta as "porcentajeVenta",
+        i.porcentaje_captacion as "porcentajeCaptacion",
+        i.es_exclusivo as "esExclusivo"
       FROM inmueble i
       LEFT JOIN agente a ON i.idagente = a.idagente
       LEFT JOIN municipio m ON i.idmunicipio = m.idmunicipio
@@ -192,7 +197,7 @@ const getProperties = async (filters = {}) => {
   }
 };
 
-const getPropertyById = async (id) => {
+const getPropertyById = async (id, user) => {
   try {
     const property = await getProperty(id);
     
@@ -205,11 +210,20 @@ const getPropertyById = async (id) => {
       getOffersByProperty(id),
     ]);
 		const timeline = await getTimelineByProperty(id, priceChanges, offers);
+    
+    let filteredOffers;
+    if(property.agentId == user.idagente)
+      filteredOffers = offers;
+    else
+      filteredOffers = offers.filter(offer => 
+        offer.idagente_responsable === user.idagente ||
+        offers.some(otherOffer => otherOffer.id === offer.originalOfferId)
+      );
 
     return {
       ...property,
       priceChanges,
-      offers,
+      offers: filteredOffers,
       timeline
     };
   } catch (error) {
@@ -341,10 +355,15 @@ const getOffersByProperty = async (propertyId) => {
         idoferta as id,
         idinmueble as "propertyId",
         fecha_oferta as date,
+        fecha_rechazo as "rejectedDate",
+        fecha_aceptacion as "aceptedDate",
         monto_oferta as amount,
         nombre_ofertante as "offeredBy",
         monto_seña as "depositAmount",
-        estado as "status"
+        estado as "status",
+        motivo_rechazo as "declineReason",
+        idoferta_padre as "originalOfferId",
+        idagente_responsable
       FROM oferta_inmueble 
       WHERE idinmueble = $1
       ORDER BY fecha_oferta DESC
@@ -361,23 +380,43 @@ const getOffersByProperty = async (propertyId) => {
 
 const createOffer = async (offerData, user) => {
   try {
-    const { propertyId, amount, offeredBy, depositAmount } = offerData;
+    const { propertyId, amount, offeredBy, depositAmount, originalOfferId } = offerData;
+
+    const isRecivingOffer = await isPropertyRecivingOffers(propertyId);
+    
+    if (!isRecivingOffer){
+      return { error: 'CONFLICT' };
+    }
     
     const result = await query(
       `
       INSERT INTO oferta_inmueble 
-      (idinmueble, nombre_ofertante, monto_oferta, monto_seña, idagente_responsable)
-      VALUES ($1, $2, $3, $4, $5)
+      (idinmueble, nombre_ofertante, monto_oferta, monto_seña, idagente_responsable, estado, idoferta_padre)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING 
         idoferta as id,
         idinmueble as "propertyId",
         fecha_oferta as date,
         monto_oferta as amount,
         nombre_ofertante as "offeredBy",
-        monto_seña as "depositAmount"
+        monto_seña as "depositAmount",
+        idoferta_padre as "originalOfferId"
       `,
-      [propertyId, offeredBy, amount, depositAmount, user.idagente]
+      [propertyId, offeredBy, amount, originalOfferId ? null : depositAmount, user.idagente, 'pendiente', originalOfferId || null]
     );
+
+    if (originalOfferId){
+      await query(
+        `
+        UPDATE oferta_inmueble
+        SET estado = 'rechazado',
+            motivo_rechazo = 'Contra oferta',
+            fecha_rechazo = timezone('America/La_Paz', NOW())
+        WHERE (idoferta = $1 OR idoferta_padre = $1) AND estado != 'rechazado' AND idoferta != $2
+        `,
+        [originalOfferId, result.rows[0].id]
+      )
+    }
 
     await query(
       `
@@ -395,7 +434,7 @@ const createOffer = async (offerData, user) => {
   }
 };
 
-const updateOfferStatus = async (offerId, propertyId, status, user) => {
+const updateOfferStatus = async (offerId, propertyId, status, reason, user) => {
   try {
     let propertyStatus = '';
     let offerAmount = null;
@@ -417,11 +456,19 @@ const updateOfferStatus = async (offerId, propertyId, status, user) => {
       case 'rechazado':
         propertyStatus = 'activo';
         break;
+
       default:
         propertyStatus = 'activo';
+        break;
     }
 
     if (status === 'aceptado') {
+      const isAceptingOffers = await isPropertyRecivingOffers(propertyId);
+
+      if (!isAceptingOffers){
+        return { error: 'CONFLICT' };
+      }
+      
       await query(
         `
         UPDATE inmueble 
@@ -438,7 +485,8 @@ const updateOfferStatus = async (offerId, propertyId, status, user) => {
         `
         UPDATE oferta_inmueble
         SET estado = $1,
-            idagente_aceptado = $2
+            idagente_aceptado = $2,
+            fecha_aceptacion = timezone('America/La_Paz', NOW())
         WHERE idoferta = $3
         `,
         ['aceptado', user.idagente, offerId]
@@ -447,20 +495,25 @@ const updateOfferStatus = async (offerId, propertyId, status, user) => {
       await query(
         `
         UPDATE oferta_inmueble
-        SET estado = $1
+        SET estado = $1,
+            motivo_rechazo = 'Otra oferta fue aceptada'
         WHERE idoferta != $2
             AND idinmueble = $3
+            AND estado != 'rechazado'
         `,
         ['rechazado', offerId, propertyId]
       );
 
       await cuadrantesService.recalcularCuadrante(propertyId);
     } else {
+      if(!reason)
+          return { error: 'MISSING_REASON'}
+
       const totalOffers = await query(
         `
         SELECT COUNT(*) as "totalOfertas" 
         FROM oferta_inmueble 
-        WHERE idinmueble = $1 AND (estado != 'rechazado' OR estado IS NULL)
+        WHERE idinmueble = $1 AND estado != 'rechazado'
         `,
         [propertyId]
       );
@@ -479,11 +532,12 @@ const updateOfferStatus = async (offerId, propertyId, status, user) => {
       await query(
         `
         UPDATE oferta_inmueble
-        SET estado = $1
-        WHERE idoferta = $2
-            AND idinmueble = $3
+        SET estado = $1,
+            motivo_rechazo = $2
+        WHERE idoferta = $3
+            AND idinmueble = $4
         `,
-        ['rechazado', offerId, propertyId]
+        ['rechazado', reason, offerId, propertyId]
       );
     }
 
@@ -562,14 +616,36 @@ const getTimelineByProperty = async (propertyId, priceChanges, offers) => {
     });
 
     offers.forEach(offer => {
+      let timelineId;
+      let timelineTittle;
+
+      if (offer.originalOfferId){
+        timelineId = `counterOffer-${offer.id}`;
+        timelineTittle = "Contra Oferta";
+      } else {
+        timelineId = `offer-${offer.id}`;
+        timelineTittle = "Nueva Oferta"
+      }
+
       timeline.push({
-        id: `offer-${offer.id}`,
+        id: timelineId,
         propertyId,
         date: offer.date,
         type: "oferta",
-        title: "Nueva oferta",
+        title: timelineTittle,
         description: `Oferta de ${offer.amount} por ${offer.offeredBy}`
       });
+
+      if (offer.status === 'rechazado'){
+        timeline.push({
+          id: `rejectedOffer-${offer.id}`,
+          propertyId,
+          date: offer.rejectedDate,
+          type: "oferta",
+          title: "Oferta Rechazada",
+          description: `Oferta de ${offer.offeredBy} rechazada por:  ${offer.declineReason}`
+        });
+      }
     });
 
     timeline.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -585,6 +661,7 @@ const getTimelineByProperty = async (propertyId, priceChanges, offers) => {
       timeline.push({
         id: `sell-${propertyId}`,
         propertyId,
+        date: offerAceptado.aceptedDate,
         type: "cambio_estado",
         title: "Propiedad vendida",
         description: `Vendida por ${formatPriceUSD(offerAceptado.amount)} a ${offerAceptado.offeredBy}`,
@@ -678,6 +755,180 @@ const getAgentById = async (id) => {
   }
 };
 
+const buildNegotiationTree = async (offers, parentId = null) => {
+  const children = offers.filter(offer => offer.parentId === parentId);
+  
+  for (const child of children) {
+    child.childNegotiations = await buildNegotiationTree(offers, child.id);
+  }
+  
+  return children;
+};
+
+const determineRepresentedParty = (offer, propertyOwnerName, agentId) => {
+  if (offer.offeredBy === propertyOwnerName) {
+    return 'owner';
+  }
+  return 'bidder';
+};
+
+const hasAccessToNegotiationHistory = async (offers, userId, userRole) => {
+  if (userRole === 'administrador') {
+    return true;
+  }
+  
+  const isInvolved = offers.some(offer => offer.agentResponsible === userId);
+  
+  if (isInvolved) {
+    return true;
+  }
+  
+  if (userRole === 'team_leader') {
+    const allInvolvedAgents = [
+      ...(offers.rows[0]?.agents_responsible || [])
+    ];
+    
+    if (allInvolvedAgents.length === 0) {
+      return false;
+    }
+    
+    const groupCheckResult = await query(
+      `
+      SELECT EXISTS(
+        SELECT 1 
+        FROM agente a1
+        JOIN agente a2 ON a1.idgrupo = a2.idgrupo
+        WHERE a1.idagente = $1 
+          AND a2.idagente = ANY($2::int[])
+          AND a1.idgrupo IS NOT NULL
+      ) AS same_group
+      `,
+      [userId, allInvolvedAgents]
+    );
+    
+    return groupCheckResult.rows[0].same_group;
+  }
+  
+  return false;
+};
+
+const getNegotiationHistory = async (offerId, propertyId, user) => {
+  try {
+    const propertyResult = await query(
+      `SELECT nombre_propietario, titulo FROM inmueble WHERE idinmueble = $1`,
+      [propertyId]
+    );
+
+    if (propertyResult.rows.length === 0) {
+      throw new Error('PROPERTY_NOT_FOUND');
+    }
+
+    const propertyOwnerName = propertyResult.rows[0].nombre_propietario;
+    const propertyTitle = propertyResult.rows[0].titulo;
+    
+    const offersResult = await query(
+      `
+        SELECT 
+          o.idoferta as id,
+          o.idinmueble as "propertyId",
+          o.idoferta_padre as "parentId",
+          o.nombre_ofertante as "offeredBy",
+          o.monto_oferta as amount,
+          o.monto_seña as "depositAmount",
+          o.fecha_oferta as date,
+          o.estado as status,
+          o.motivo_rechazo as "declineReason",
+          o.fecha_rechazo as "rejectedDate",
+		      o.fecha_aceptacion as "aceptedDate",
+          o.idagente_responsable as "agentResponsible",
+          o.idagente_aceptado as "agentAccepted",
+          CASE 
+            WHEN o.idoferta_padre IS NOT NULL THEN TRUE
+            ELSE FALSE
+          END as "isCounterOffer"
+        FROM oferta_inmueble o
+        WHERE o.idinmueble = $1
+          AND (o.idoferta = $2 OR o.idoferta_padre = $2)
+		    ORDER BY o.fecha_oferta ASC
+      `,
+      [propertyId, offerId]
+    );
+    
+    if (offersResult.rows.length === 0) {
+      throw new Error('OFFER_NOT_FOUND');
+    }
+
+    const hasAccess = await hasAccessToNegotiationHistory(
+      offersResult.rows,
+      user.idagente, 
+      user.rol
+    );
+    
+    if (!hasAccess) {
+      throw new Error('ACCESS_DENIED');
+    }
+    
+    const rootOffer = offersResult.rows.find(offer => !offer.parentId);
+    
+    if (!rootOffer) {
+      throw new Error('OFFER_NOT_FOUND');
+    }
+    
+    const agentIds = [...new Set(offersResult.rows.flatMap(offer => 
+      [offer.agentResponsible, offer.agentAccepted].filter(id => id)
+    ))];
+    
+    let agentMap = new Map();
+    if (agentIds.length > 0) {
+      const agentsResult = await query(
+        `
+        SELECT 
+          idagente as id,
+          nombre || ' ' || apellido as name,
+          telefono
+        FROM agente
+        WHERE idagente = ANY($1::int[])
+        `,
+        [agentIds]
+      );
+      
+      agentsResult.rows.forEach(agent => {
+        agentMap.set(agent.id, agent.name);
+        agentMap.set(agent.name, agent.telefono);
+      });
+    }
+    
+    const enrichedOffers = offersResult.rows.map(offer => ({
+      ...offer,
+      agentResponsible: agentMap.get(offer.agentResponsible) || offer.agentResponsible,
+      idagenteResponsable: offer.agentResponsible,
+      agentResponsibleNumber: agentMap.get(agentMap.get(offer.agentResponsible)),
+      agentAccepted: agentMap.get(offer.agentAccepted) || offer.agentAccepted,
+      representedParty: determineRepresentedParty(offer, propertyOwnerName, offer.agentResponsible)
+    }));
+    
+    const negotiations = await buildNegotiationTree(enrichedOffers);
+    
+    const rootWithChildren = negotiations.find(n => n.id === rootOffer.id);
+    
+    const mainOfferedBy = rootOffer.offeredBy;
+    
+    const negotiationThread = {
+      originalOfferId: rootOffer.id.toString(),
+      propertyId: propertyId.toString(),
+      propertyTitle: propertyTitle,
+      mainOfferedBy: mainOfferedBy,
+      negotiations: rootWithChildren ? [rootWithChildren] : []
+    };
+    
+    return negotiationThread;
+    
+  } catch (error) {
+    console.error("Error en getNegotiationHistory:", error);
+    throw error;
+  }
+};
+
 module.exports = {
   getProperties,
   getPropertyById,
@@ -686,4 +937,5 @@ module.exports = {
   createOffer,
   updateOfferStatus,
   getAgentById,
+  getNegotiationHistory,
 };

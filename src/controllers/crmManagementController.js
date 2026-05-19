@@ -29,8 +29,9 @@ const getProperties = async (req, res) => {
 const getPropertyById = async (req, res) => {
   try {
     const { id } = req.params;
+    const user = req.user;
     
-    const property = await crmManagementService.getPropertyById(id);
+    const property = await crmManagementService.getPropertyById(id, user);
     
     if (!property) {
       return res.status(404).json({
@@ -148,6 +149,22 @@ const createOffer = async (req, res) => {
     }
     
     const offer = await crmManagementService.createOffer(offerData, user);
+
+    if (offer?.error) {
+      switch (offer.error) {
+        case 'CONFLICT':
+          return res.status(409).json({
+            success: false,
+            message: "Ya no se aceptan nuevas solicitudes de ofertas",
+          });
+
+        default:
+          return res.status(400).json({
+            success: false,
+            message: "Error al crear una oferta",
+          });
+      }
+    }
     
     res.status(201).json({
       success: true,
@@ -167,7 +184,7 @@ const createOffer = async (req, res) => {
 const updateOfferStatus = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, propertyId } = req.body;
+    const { status, propertyId, reason } = req.body;
     const user = req.user;
     
     if (!status || !propertyId) {
@@ -177,7 +194,29 @@ const updateOfferStatus = async (req, res) => {
       });
     }
     
-    const offer = await crmManagementService.updateOfferStatus(id, propertyId, status, user);
+    const offer = await crmManagementService.updateOfferStatus(id, propertyId, status, reason, user);
+    
+    if (offer?.error) {
+      switch (offer.error) {
+        case 'CONFLICT':
+          return res.status(409).json({
+            success: false,
+            message: "Ya se acepto otra oferta",
+          });
+
+        case 'MISSING_REASON':
+          return res.status(400).json({
+            success: false,
+            message: "Falta el motivo del rechazo",
+          });
+
+        default:
+          return res.status(400).json({
+            success: false,
+            message: "Error al aceptar la oferta",
+          });
+      }
+    }
     
     res.json({
       success: true,
@@ -221,6 +260,78 @@ const getAgentById = async (req, res) => {
   }
 };
 
+const getNegotiationHistory = async (req, res) => {
+  try {
+    const { offerId, propertyId } = req.params;
+    const user = req.user;
+
+    // Validaciones de parámetros
+    if (!offerId || !propertyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Se requiere offerId y propertyId"
+      });
+    }
+
+    // Validar que sean números válidos
+    if (isNaN(offerId) || isNaN(propertyId)) {
+      return res.status(400).json({
+        success: false,
+        message: "offerId y propertyId deben ser números válidos"
+      });
+    }
+
+    const negotiationThread = await crmManagementService.getNegotiationHistory(
+      parseInt(offerId),
+      parseInt(propertyId),
+      user
+    );
+
+    if (!negotiationThread) {
+      return res.status(404).json({
+        success: false,
+        message: "No se encontró el historial de negociaciones"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: negotiationThread
+    });
+
+  } catch (error) {
+    console.error("Error en getNegotiationHistory:", error);
+    
+    // Manejo específico de errores
+    if (error.message === 'PROPERTY_NOT_FOUND') {
+      return res.status(404).json({
+        success: false,
+        message: "Propiedad no encontrada"
+      });
+    }
+    
+    if (error.message === 'OFFER_NOT_FOUND') {
+      return res.status(404).json({
+        success: false,
+        message: "Oferta no encontrada en esta propiedad"
+      });
+    }
+
+    if (error.message === 'ACCESS_DENIED') {
+      return res.status(403).json({
+        success: false,
+        message: "No tienes permiso para ver este historial"
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    });
+  }
+};
+
 module.exports = {
   getProperties,
   getPropertyById,
@@ -229,4 +340,5 @@ module.exports = {
   createOffer,
   updateOfferStatus,
   getAgentById,
+  getNegotiationHistory
 };
