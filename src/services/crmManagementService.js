@@ -499,7 +499,8 @@ const updateOfferStatus = async (offerId, propertyId, status, reason, user) => {
         `
         UPDATE oferta_inmueble
         SET estado = $1,
-            motivo_rechazo = 'Otra oferta fue aceptada'
+            motivo_rechazo = 'Otra oferta fue aceptada',
+            fecha_rechazo = timezone('America/La_Paz', NOW())
         WHERE idoferta != $2
             AND idinmueble = $3
             AND estado != 'rechazado'
@@ -641,7 +642,7 @@ const getTimelineByProperty = async (propertyId, priceChanges, offers, property)
           date: offer.rejectedDate,
           type: "oferta",
           title: "Oferta Rechazada",
-          description: `Oferta de ${offer.offeredBy} rechazada por:  ${offer.declineReason}`
+          description: `Oferta de ${offer.offeredBy} de ${offer.amount} rechazada por:  ${offer.declineReason}`
         });
       }
     });
