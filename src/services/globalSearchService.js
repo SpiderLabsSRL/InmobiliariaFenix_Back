@@ -61,7 +61,7 @@ const searchAll = async (filters) => {
 
     const queryParams = [];
 
-    if (filters.search || filters.city || filters.zone || filters.type || 
+    if (filters.search || filters.department || filters.province || filters.type || filters.municipality ||
         filters.propertyType || filters.priceMin !== undefined || filters.priceMax !== undefined ||
         filters.sqMin !== undefined || filters.sqMax !== undefined ||
         filters.bedroomsMin !== undefined || filters.bathroomsMin !== undefined ||
@@ -83,10 +83,21 @@ const searchAll = async (filters) => {
         paramCounter++;
       }
       
-      // Filtro por ciudad (municipio)
-      if (filters.city) {
+      if (filters.municipality) {
         propertiesQuery += ` AND m.nombre ILIKE $${paramCounter}`;
-        queryParams.push(`%${filters.city}%`);
+        queryParams.push(`%${filters.municipality}%`);
+        paramCounter++;
+      }
+
+      if (filters.province) {
+        propertiesQuery += ` AND p.nombre ILIKE $${paramCounter}`;
+        queryParams.push(`%${filters.province}%`);
+        paramCounter++;
+      }
+
+      if (filters.department) {
+        propertiesQuery += ` AND m.nombre ILIKE $${paramCounter}`;
+        queryParams.push(`%${filters.department}%`);
         paramCounter++;
       }
       
