@@ -365,7 +365,8 @@ const getOffersByProperty = async (propertyId) => {
         o.idoferta_padre as "originalOfferId",
         o.idagente_responsable,
         a.nombre as "agentName",
-        a.telefono as "agentPhone"
+        a.telefono as "agentPhone",
+        o.turno
       FROM oferta_inmueble o
       LEFT JOIN agente a ON o.idagente_responsable = a.idagente
       WHERE o.idinmueble = $1
@@ -394,8 +395,18 @@ const createOffer = async (offerData, user) => {
     const result = await query(
       `
       INSERT INTO oferta_inmueble 
-      (idinmueble, nombre_ofertante, monto_oferta, monto_seña, idagente_responsable, estado, idoferta_padre)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (idinmueble, nombre_ofertante, monto_oferta, monto_seña, 
+        idagente_responsable, estado, idoferta_padre, turno)
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        CASE 
+          WHEN EXISTS(
+            SELECT 1 FROM inmueble 
+            WHERE idinmueble = $1 AND nombre_propietario = $8
+          ) THEN 'Comprador'
+          ELSE 'Vendedor'
+        END
+      )
       RETURNING 
         idoferta as id,
         idinmueble as "propertyId",
@@ -405,7 +416,7 @@ const createOffer = async (offerData, user) => {
         monto_seña as "depositAmount",
         idoferta_padre as "originalOfferId"
       `,
-      [propertyId, offeredBy, amount, originalOfferId ? null : depositAmount, user.idagente, 'pendiente', originalOfferId || null]
+      [propertyId, offeredBy, amount, originalOfferId ? null : depositAmount, user.idagente, 'pendiente', originalOfferId || null, offeredBy]
     );
 
     if (originalOfferId){
@@ -841,6 +852,7 @@ const getNegotiationHistory = async (offerId, propertyId, user) => {
 		      o.fecha_aceptacion as "aceptedDate",
           o.idagente_responsable as "agentResponsible",
           o.idagente_aceptado as "agentAccepted",
+          o.turno,
           CASE 
             WHEN o.idoferta_padre IS NOT NULL THEN TRUE
             ELSE FALSE
