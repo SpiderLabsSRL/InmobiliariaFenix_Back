@@ -151,14 +151,6 @@ const CONSTRUCTION_PRICES = {
   'lujo': 1000,
 };
 
-const CONDITION_DEPRECIATION = {
-  'excelente': { min: 0, max: 15, average: 7.5 },
-  'bueno': { min: 10, max: 15, average: 12.5 },
-  'regular': { min: 20, max: 30, average: 25 },
-  'malo': { min: 40, max: 50, average: 45 },
-  'ruinoso': { min: 60, max: 80, average: 70 },
-};
-
 const OPTIONAL_MULTIPLIERS = {
   hasElevator: 1.05,
   hasGarage: 1.08,
@@ -180,15 +172,12 @@ const getConstructionTypeLabel = (type) => {
   return labels[type] || type;
 };
 
-const getConditionLabel = (condition) => {
-  const labels = {
-    'excelente': 'Excelente',
-    'bueno': 'Bueno',
-    'regular': 'Regular',
-    'malo': 'Malo',
-    'ruinoso': 'Ruinoso'
-  };
-  return labels[condition] || condition;
+const getConditionLabel = (depreciation) => {
+  if (depreciation <= 7.5) return 'Excelente';
+  else if (depreciation <= 12.5) return 'Bueno';
+  else if (depreciation <= 25) return 'Regular';
+  else if (depreciation <= 30) return 'Malo';
+  else return 'Ruinoso';
 };
 
 const getComparableProperties = async (property, selectedZone, finalValue) => {
@@ -277,7 +266,7 @@ const getComparableProperties = async (property, selectedZone, finalValue) => {
 };
 
 const calculateValue = async (property, options = {}) => {
-  const { sqMetersLand, sqMeters, zoneId, constructionType, condition } = property;
+  const { sqMetersLand, sqMeters, zoneId, constructionType, yearBuilt } = property;
   
   let selectedZone = null;
   if (zoneId) {
@@ -291,8 +280,11 @@ const calculateValue = async (property, options = {}) => {
   const constructionValue = zoneConstructionPrice * sqMeters;
   const landValue = zonePrice * sqMetersLand;
   
-  const depreciation = CONDITION_DEPRECIATION[condition];
-  const depreciationPercentage = depreciation.average / 100;
+  const currentYear = new Date().getFullYear();
+  const yearsOld = Math.max(0, currentYear - yearBuilt);
+  const depreciation = Math.min(95, yearsOld * 2.5);
+
+  const depreciationPercentage = depreciation / 100;
   const depreciationValue = constructionValue * depreciationPercentage;
   
   const baseValue = landValue + (constructionValue - depreciationValue);
@@ -370,10 +362,10 @@ const calculateValue = async (property, options = {}) => {
     { label: 'm² Construcción', value: `${sqMeters} m²`, impact: `$${zoneConstructionPrice.toLocaleString()}/m²`, details: `Precio base por zona` },
     { label: 'm² Terreno', value: `${sqMetersLand} m²`, impact: `$${zonePrice.toLocaleString()}/m²`, details: `Valor terreno: ${((landValue / (landValue + constructionValue)) * 100).toFixed(0)}% del total` },
     { label: 'Tipo Construcción', value: getConstructionTypeLabel(constructionType), impact: `$${baseConstructionPrice}/m²`, details: `Categoría: ${constructionType}` },
-    { label: 'Condición', value: getConditionLabel(condition), impact: `-${depreciationPercentage * 100}%`, details: `Depreciación: ${depreciation.average}% (rango ${depreciation.min}-${depreciation.max}%)` },
+    { label: 'Condición', value: getConditionLabel(depreciation), impact: `-${depreciationPercentage * 100}%`, details: `Depreciación: ${depreciation}%` },
     { label: 'Valor Terreno', value: `$${Math.round(landValue).toLocaleString()}`, impact: `${((landValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMetersLand} m² × $${zonePrice}/m²` },
     { label: 'Valor Construcción', value: `$${Math.round(constructionValue).toLocaleString()}`, impact: `${((constructionValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMeters} m² × $${zoneConstructionPrice}/m²` },
-    { label: 'Depreciación', value: `-$${Math.round(depreciationValue).toLocaleString()}`, impact: `-${depreciationPercentage * 100}%`, details: `Por condición: ${condition}` },
+    { label: 'Depreciación', value: `-$${Math.round(depreciationValue).toLocaleString()}`, impact: `-${depreciationPercentage * 100}%`, details: `Por condición: ${getConditionLabel(depreciation)}` },
     { label: 'Valor Final Estimado', value: `$${Math.round(finalValue).toLocaleString()}`, impact: `${pricePerSqm.toLocaleString()}/m²`, details: `Precio por metro cuadrado construido` },
   ];
   
@@ -393,6 +385,7 @@ const calculateValue = async (property, options = {}) => {
     landValue: Math.round(landValue),
     constructionValue: Math.round(constructionValue),
     depreciationValue: Math.round(depreciationValue),
+    depreciationPercentage: depreciation,
     finalValue: Math.round(finalValue),
     pricePerSqm: Math.round(pricePerSqm),
     marginLow,
