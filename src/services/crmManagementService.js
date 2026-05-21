@@ -209,7 +209,7 @@ const getPropertyById = async (id, user) => {
       getPriceChangesByProperty(id),
       getOffersByProperty(id),
     ]);
-		const timeline = await getTimelineByProperty(id, priceChanges, offers);
+		const timeline = await getTimelineByProperty(id, priceChanges, offers, property);
     
     let filteredOffers;
     if(property.agentId == user.idagente)
@@ -352,21 +352,25 @@ const getOffersByProperty = async (propertyId) => {
     const result = await query(
       `
       SELECT 
-        idoferta as id,
-        idinmueble as "propertyId",
-        fecha_oferta as date,
-        fecha_rechazo as "rejectedDate",
-        fecha_aceptacion as "aceptedDate",
-        monto_oferta as amount,
-        nombre_ofertante as "offeredBy",
-        monto_seña as "depositAmount",
-        estado as "status",
-        motivo_rechazo as "declineReason",
-        idoferta_padre as "originalOfferId",
-        idagente_responsable
-      FROM oferta_inmueble 
-      WHERE idinmueble = $1
-      ORDER BY fecha_oferta DESC
+        o.idoferta as id,
+        o.idinmueble as "propertyId",
+        o.fecha_oferta as date,
+        o.fecha_rechazo as "rejectedDate",
+        o.fecha_aceptacion as "aceptedDate",
+        o.monto_oferta as amount,
+        o.nombre_ofertante as "offeredBy",
+        o.monto_seña as "depositAmount",
+        o.estado as "status",
+        o.motivo_rechazo as "declineReason",
+        o.idoferta_padre as "originalOfferId",
+        o.idagente_responsable,
+        a.nombre as "agentName",
+        a.telefono as "agentPhone",
+        o.turno
+      FROM oferta_inmueble o
+      LEFT JOIN agente a ON o.idagente_responsable = a.idagente
+      WHERE o.idinmueble = $1
+      ORDER BY o.fecha_oferta DESC
       `,
       [propertyId]
     );
@@ -391,8 +395,18 @@ const createOffer = async (offerData, user) => {
     const result = await query(
       `
       INSERT INTO oferta_inmueble 
-      (idinmueble, nombre_ofertante, monto_oferta, monto_seña, idagente_responsable, estado, idoferta_padre)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+        (idinmueble, nombre_ofertante, monto_oferta, monto_seña, 
+        idagente_responsable, estado, idoferta_padre, turno)
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7,
+        CASE 
+          WHEN EXISTS(
+            SELECT 1 FROM inmueble 
+            WHERE idinmueble = $1 AND nombre_propietario = $8
+          ) THEN 'Comprador'
+          ELSE 'Vendedor'
+        END
+      )
       RETURNING 
         idoferta as id,
         idinmueble as "propertyId",
@@ -402,7 +416,7 @@ const createOffer = async (offerData, user) => {
         monto_seña as "depositAmount",
         idoferta_padre as "originalOfferId"
       `,
-      [propertyId, offeredBy, amount, originalOfferId ? null : depositAmount, user.idagente, 'pendiente', originalOfferId || null]
+      [propertyId, offeredBy, amount, originalOfferId ? null : depositAmount, user.idagente, 'pendiente', originalOfferId || null, offeredBy]
     );
 
     if (originalOfferId){
@@ -496,7 +510,8 @@ const updateOfferStatus = async (offerId, propertyId, status, reason, user) => {
         `
         UPDATE oferta_inmueble
         SET estado = $1,
-            motivo_rechazo = 'Otra oferta fue aceptada'
+            motivo_rechazo = 'Otra oferta fue aceptada',
+            fecha_rechazo = timezone('America/La_Paz', NOW())
         WHERE idoferta != $2
             AND idinmueble = $3
             AND estado != 'rechazado'
@@ -533,7 +548,8 @@ const updateOfferStatus = async (offerId, propertyId, status, reason, user) => {
         `
         UPDATE oferta_inmueble
         SET estado = $1,
-            motivo_rechazo = $2
+            motivo_rechazo = $2,
+            fecha_rechazo = timezone('America/La_Paz', NOW())
         WHERE idoferta = $3
             AND idinmueble = $4
         `,
@@ -580,22 +596,16 @@ const getPriceChangesByProperty = async (propertyId) => {
   }
 };
 
-const getTimelineByProperty = async (propertyId, priceChanges, offers) => {
+const getTimelineByProperty = async (propertyId, priceChanges, offers, property) => {
   try {
     const timeline = [];
-
-    const propertyResult = await query(
-      `SELECT fecha_creacion as date, titulo as title, idagente as "agentId"
-       FROM inmueble WHERE idinmueble = $1`,
-      [propertyId]
-    );
     
-    if (propertyResult.rows.length > 0) {
-      const prop = propertyResult.rows[0];
+    if (property) {
+      const prop = property;
       timeline.push({
         id: `captacion-${propertyId}`,
         propertyId,
-        date: prop.date,
+        date: prop.capturedDate,
         type: "captacion",
         title: "Propiedad captada",
         description: `Propiedad "${prop.title}" fue captada`,
@@ -643,7 +653,7 @@ const getTimelineByProperty = async (propertyId, priceChanges, offers) => {
           date: offer.rejectedDate,
           type: "oferta",
           title: "Oferta Rechazada",
-          description: `Oferta de ${offer.offeredBy} rechazada por:  ${offer.declineReason}`
+          description: `Oferta de ${offer.offeredBy} de ${offer.amount} rechazada por:  ${offer.declineReason}`
         });
       }
     });
@@ -842,6 +852,7 @@ const getNegotiationHistory = async (offerId, propertyId, user) => {
 		      o.fecha_aceptacion as "aceptedDate",
           o.idagente_responsable as "agentResponsible",
           o.idagente_aceptado as "agentAccepted",
+          o.turno,
           CASE 
             WHEN o.idoferta_padre IS NOT NULL THEN TRUE
             ELSE FALSE
