@@ -111,7 +111,7 @@ const searchAll = async (filters) => {
       // Filtro por tipo de propiedad
       if (filters.propertyType) {
         propertiesQuery += ` AND i.tipo_propiedad = $${paramCounter}`;
-        queryParams.push(filters.propertyType);
+        queryParams.push(filters.propertyType.toLowerCase());
         paramCounter++;
       }
       
