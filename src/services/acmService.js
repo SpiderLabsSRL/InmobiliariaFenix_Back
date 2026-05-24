@@ -359,14 +359,14 @@ const calculateValue = async (property, options = {}) => {
   
   // Construir factores
   const factors = [
-    { label: 'm² Construcción', value: `${sqMeters} m²`, impact: `$${zoneConstructionPrice.toLocaleString()}/m²`, details: `Precio base por zona` },
-    { label: 'm² Terreno', value: `${sqMetersLand} m²`, impact: `$${zonePrice.toLocaleString()}/m²`, details: `Valor terreno: ${((landValue / (landValue + constructionValue)) * 100).toFixed(0)}% del total` },
+    { label: 'm² Construcción', value: `${sqMeters} m²`, impact: `$${zoneConstructionPrice}/m²`, details: `Precio base por zona` },
+    { label: 'm² Terreno', value: `${sqMetersLand} m²`, impact: `$${zonePrice}/m²`, details: `Valor terreno: ${((landValue / (landValue + constructionValue)) * 100).toFixed(0)}% del total` },
     { label: 'Tipo Construcción', value: getConstructionTypeLabel(constructionType), impact: `$${baseConstructionPrice}/m²`, details: `Categoría: ${constructionType}` },
     { label: 'Condición', value: getConditionLabel(depreciation), impact: `-${depreciationPercentage * 100}%`, details: `Depreciación: ${depreciation}%` },
-    { label: 'Valor Terreno', value: `$${Math.round(landValue).toLocaleString()}`, impact: `${((landValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMetersLand} m² × $${zonePrice}/m²` },
-    { label: 'Valor Construcción', value: `$${Math.round(constructionValue).toLocaleString()}`, impact: `${((constructionValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMeters} m² × $${zoneConstructionPrice}/m²` },
-    { label: 'Depreciación', value: `-$${Math.round(depreciationValue).toLocaleString()}`, impact: `-${depreciationPercentage * 100}%`, details: `Por condición: ${getConditionLabel(depreciation)}` },
-    { label: 'Valor Final Estimado', value: `$${Math.round(finalValue).toLocaleString()}`, impact: `${pricePerSqm.toLocaleString()}/m²`, details: `Precio por metro cuadrado construido` },
+    { label: 'Valor Terreno', value: `$${Math.round(landValue)}`, impact: `${((landValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMetersLand} m² × $${zonePrice}/m²` },
+    { label: 'Valor Construcción', value: `$${Math.round(constructionValue)}`, impact: `${((constructionValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMeters} m² × $${zoneConstructionPrice}/m²` },
+    { label: 'Depreciación', value: `-$${Math.round(depreciationValue)}`, impact: `-${depreciationPercentage * 100}%`, details: `Por condición: ${getConditionLabel(depreciation)}` },
+    { label: 'Valor Final Estimado', value: `$${Math.round(finalValue)}`, impact: `${pricePerSqm}/m²`, details: `Precio por metro cuadrado construido` },
   ];
   
   // Margen de porcentaje
