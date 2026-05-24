@@ -65,6 +65,9 @@ app.use("/api/acm", acmRoutes);
 const globalSearchRoutes = require("./src/routes/globalSearchRoutes");
 app.use("/api/global-search", globalSearchRoutes);
 
+const projectsRoutes = require("./src/routes/projectsRoutes");
+app.use("/api/projects", projectsRoutes);
+
 const sidebarRoutes = require("./src/routes/sidebarRoutes");
 app.use("/api/agentes", sidebarRoutes);
 
