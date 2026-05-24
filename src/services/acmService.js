@@ -289,72 +289,7 @@ const calculateValue = async (property, options = {}) => {
   
   const baseValue = landValue + (constructionValue - depreciationValue);
   
-  let optionalMultiplier = 1;
-  const optionalFactors = [];
-  
-  const floors = property.numberOfFloors || 1;
-  if (floors > 1) {
-    const floorBonus = 1 + ((floors - 1) * (OPTIONAL_MULTIPLIERS.extraFloor - 1));
-    optionalMultiplier *= floorBonus;
-    optionalFactors.push({
-      label: 'Pisos adicionales',
-      value: `${floors} pisos`,
-      impact: `+${((floorBonus - 1) * 100).toFixed(0)}%`,
-    });
-  }
-  
-  const bedrooms = property.bedrooms || 2;
-  if (bedrooms > 2) {
-    const bedroomBonus = 1 + ((bedrooms - 2) * (OPTIONAL_MULTIPLIERS.extraBedroom - 1));
-    optionalMultiplier *= bedroomBonus;
-    optionalFactors.push({
-      label: 'Habitaciones extra',
-      value: `${bedrooms} hab.`,
-      impact: `+${((bedroomBonus - 1) * 100).toFixed(0)}%`,
-    });
-  }
-  
-  const bathrooms = property.bathrooms || 1;
-  if (bathrooms > 1) {
-    const bathroomBonus = 1 + ((bathrooms - 1) * (OPTIONAL_MULTIPLIERS.extraBathroom - 1));
-    optionalMultiplier *= bathroomBonus;
-    optionalFactors.push({
-      label: 'Baños extra',
-      value: `${bathrooms} baños`,
-      impact: `+${((bathroomBonus - 1) * 100).toFixed(0)}%`,
-    });
-  }
-  
-  const parking = property.parkingSpots || 1;
-  if (parking > 1) {
-    const parkingBonus = 1 + ((parking - 1) * (OPTIONAL_MULTIPLIERS.extraParking - 1));
-    optionalMultiplier *= parkingBonus;
-    optionalFactors.push({
-      label: 'Estacionamientos extra',
-      value: `${parking} est.`,
-      impact: `+${((parkingBonus - 1) * 100).toFixed(0)}%`,
-    });
-  }
-  
-  const specialFeatures = [
-    { key: 'hasElevator', label: 'Ascensor', multiplier: OPTIONAL_MULTIPLIERS.hasElevator },
-    { key: 'hasGarage', label: 'Garaje', multiplier: OPTIONAL_MULTIPLIERS.hasGarage },
-    { key: 'hasTerrace', label: 'Terraza', multiplier: OPTIONAL_MULTIPLIERS.hasTerrace },
-    { key: 'hasPool', label: 'Piscina', multiplier: OPTIONAL_MULTIPLIERS.hasPool },
-  ];
-  
-  specialFeatures.forEach(feature => {
-    if (property[feature.key]) {
-      optionalMultiplier *= feature.multiplier;
-      optionalFactors.push({
-        label: feature.label,
-        value: 'Sí',
-        impact: `+${((feature.multiplier - 1) * 100).toFixed(0)}%`,
-      });
-    }
-  });
-  
-  const finalValue = baseValue * optionalMultiplier;
+  const finalValue = baseValue;
   const pricePerSqm = finalValue / sqMeters;
   
   // Construir factores
