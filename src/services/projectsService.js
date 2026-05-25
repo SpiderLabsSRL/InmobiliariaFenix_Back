@@ -232,8 +232,6 @@ const createProject = async (projectData) => {
         );
       });
 
-      console.log(values);
-
       const queryImagen = `
         INSERT INTO imagen_inmueble (idproyecto, imagen, es_principal, orden)
         VALUES ${valueSets.join(', ')}
@@ -263,8 +261,7 @@ const updateProject = async (id, projectData) => {
       soldUnits,
       priceFrom,
       features,
-      imagesToAdd = [],
-      imagesToDelete = []
+      images = []
     } = projectData;
     
     const updates = [];
@@ -344,53 +341,113 @@ const updateProject = async (id, projectData) => {
       await query(insertRelationsSql, [id, ...featureIds]);
     }
     
-    if (imagesToDelete && imagesToDelete.length > 0) {
-      for (const imageId of imagesToDelete) {
-        await query('DELETE FROM imagen_inmueble WHERE idimagen = $1 AND idproyecto = $2', [imageId, id]);
-      }
-    }
-    
-    if (imagesToAdd && imagesToAdd.length > 0) {
-      const maxOrderResult = await query(
-        'SELECT COALESCE(MAX(orden), -1) as max_orden FROM imagen_inmueble WHERE idproyecto = $1',
-        [id]
-      );
-      let nextOrder = maxOrderResult.rows[0].max_orden + 1;
-      
-      for (const image of imagesToAdd) {
-        let imageBuffer;
+    if (images && images.length > 0) {
+      const existingImagesQuery = `
+        SELECT idimagen, orden 
+        FROM imagen_inmueble 
+        WHERE idproyecto = $1
+        ORDER BY orden
+      `;
+      const existingImagesResult = await query(existingImagesQuery, [id]);
+      const existingImages = existingImagesResult.rows;
+
+      const imagesToKeep = [];
+      const newImagesToInsert = [];
+
+      for (let index = 0; index < images.length; index++) {
+        const imageString = images[index];
         
-        if (typeof image === 'string') {
-          const base64Data = image.replace(/^data:image\/\w+;base64,/, '');
-          imageBuffer = Buffer.from(base64Data, 'base64');
-        } else if (Buffer.isBuffer(image)) {
-          imageBuffer = image;
-        } else if (image.imagen) {
-          if (typeof image.imagen === 'string') {
-            const base64Data = image.imagen.replace(/^data:image\/\w+;base64,/, '');
-            imageBuffer = Buffer.from(base64Data, 'base64');
-          } else if (Buffer.isBuffer(image.imagen)) {
-            imageBuffer = image.imagen;
+        if (imageString.startsWith('/projects/')) {
+          const match = imageString.match(/\/projects\/\d+\/images\/(\d+)/);
+          if (match) {
+            const idimagen = parseInt(match[1]);
+            imagesToKeep.push({ idimagen, newOrder: index });
           }
-        }
-        
-        if (imageBuffer) {
-          const insertImageSql = `
-            INSERT INTO imagen_inmueble (idproyecto, imagen, es_principal, orden)
-            VALUES ($1, $2, $3, $4)
-          `;
-          
-          await query(insertImageSql, [
-            id,
-            imageBuffer,
-            false, // Las nuevas imágenes no son principales por defecto
-            image.orden !== undefined ? image.orden : nextOrder++
-          ]);
+        } else if (imageString.startsWith('data:image')) {
+          newImagesToInsert.push({ imageData: imageString, order: index });
         }
       }
+
+      const keptImageIds = imagesToKeep.map(img => img.idimagen);
+      const imagesToDelete = existingImages
+        .filter(img => !keptImageIds.includes(img.idimagen))
+        .map(img => img.idimagen);
+
+      if (imagesToDelete.length > 0) {
+        const deleteQuery = `
+          DELETE FROM imagen_inmueble 
+          WHERE idimagen = ANY($1)
+        `;
+        await query(deleteQuery, [imagesToDelete]);
+      }
+
+      if (imagesToKeep.length > 0) {
+        const updateCases = imagesToKeep.map((img, idx) => {
+          return `WHEN ${img.idimagen} THEN ${img.newOrder}`;
+        }).join(' ');
+
+        const updateEsPrincipalCases = imagesToKeep.map((img, idx) => {
+          return `WHEN ${img.idimagen} THEN ${img.newOrder === 0}`;
+        }).join(' ');
+
+        const ids = imagesToKeep.map(img => img.idimagen);
+
+        const updateQuery = `
+          UPDATE imagen_inmueble 
+          SET 
+            orden = CASE idimagen ${updateCases} END,
+            es_principal = CASE idimagen ${updateEsPrincipalCases} END
+          WHERE idimagen = ANY($1)
+        `;
+        
+        await query(updateQuery, [ids]);
+      }
+
+      if (newImagesToInsert.length > 0) {
+        const compressedImages = await Promise.all(
+          newImagesToInsert.map(async (imgData) => {
+            const base64Data = imgData.imageData.split(',')[1];
+            const buffer = Buffer.from(base64Data, 'base64');
+            const compressedBuffer = await propertyService.compressImage(
+              buffer, 
+              `imagen_${imgData.order}`
+            );
+            return { compressedBuffer, order: imgData.order };
+          })
+        );
+
+        const valueSets = compressedImages.map((_, index) => {
+          const offset = index * 4;
+          return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4})`;
+        });
+
+        const values = [];
+        compressedImages.forEach((imgData) => {
+          values.push(
+            id,
+            imgData.compressedBuffer,
+            imgData.order === 0,
+            imgData.order
+          );
+        });
+
+        const insertQuery = `
+          INSERT INTO imagen_inmueble (idproyecto, imagen, es_principal, orden)
+          VALUES ${valueSets.join(', ')}
+          RETURNING idimagen, es_principal, orden
+        `;
+        
+        await query(insertQuery, values);
+      }
+
+      const resetPrincipalQuery = `
+        UPDATE imagen_inmueble 
+        SET es_principal = (orden = 0)
+        WHERE idproyecto = $1
+      `;
+      await query(resetPrincipalQuery, [id]);
     }
-    
-    // Retornar el proyecto actualizado
+
     return await getProjectById(id);
   } catch (error) {
     console.error("Error en updateProject:", error);
