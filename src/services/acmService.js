@@ -180,6 +180,17 @@ const getConditionLabel = (depreciation) => {
   else return 'Ruinoso';
 };
 
+const createSquareAroundCenter = (lat, lng) => {
+  const halfSide = 0.0045;
+  
+  const northWest = [lat + halfSide, lng - halfSide];
+  const northEast = [lat + halfSide, lng + halfSide];
+  const southEast = [lat - halfSide, lng + halfSide];
+  const southWest = [lat - halfSide, lng - halfSide];
+  
+  return [northWest, northEast, southEast, southWest];
+}
+
 const getComparableProperties = async (property, selectedZone, finalValue) => {
   const points = selectedZone.points;
   const polygonPoints = points.map((point) => `${point[1]} ${point[0]}`).join(",");
@@ -271,9 +282,15 @@ const calculateValue = async (property, options = {}) => {
   let selectedZone = null;
   if (zoneId) {
     selectedZone = await cuadrantesService.getCuadranteById(zoneId);
+  } else {
+    selectedZone = {
+        name: `Zona Alrededor de la propiedad}`,
+        points: createSquareAroundCenter(property.lat, property.lng),
+        price: property.precio_m2_sugerido,
+      };
   }
   
-  const zonePrice = selectedZone?.price || 300;
+  const zonePrice = selectedZone?.price;
   const zoneConstructionPrice = selectedZone?.precio_construccion || CONSTRUCTION_PRICES[constructionType];
   const baseConstructionPrice = CONSTRUCTION_PRICES[constructionType];
   
