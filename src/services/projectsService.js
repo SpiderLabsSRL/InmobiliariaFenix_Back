@@ -203,7 +203,7 @@ const createProject = async (projectData) => {
         VALUES ${valuesPlaceholders}
       `;
 
-      await query(insertRelationsSql, [id, ...featureIds]);
+      await query(insertRelationsSql, [projectId, ...featureIds]);
     }
     
     if (images && images.length > 0) {
