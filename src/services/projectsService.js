@@ -152,7 +152,8 @@ const createProject = async (projectData) => {
       soldUnits = 0,
       priceFrom,
       features = [],
-      images = []
+      images = [],
+      video_link,
     } = projectData;
     
     const tipo_proyecto = projectData.ownership === 'own' ? 'propio' : 'terceros';
@@ -168,8 +169,9 @@ const createProject = async (projectData) => {
         fecha_fin,
         unidades_totales,
         unidades_vendidas,
-        precio
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        precio,
+        enlace_video_proyecto
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING idproyecto
     `;
     
@@ -183,7 +185,8 @@ const createProject = async (projectData) => {
       endDate || null,
       totalUnits,
       soldUnits,
-      priceFrom
+      priceFrom,
+      video_link
     ]);
     
     const projectId = projectResult.rows[0].idproyecto;
@@ -261,7 +264,8 @@ const updateProject = async (id, projectData) => {
       soldUnits,
       priceFrom,
       features,
-      images = []
+      images = [],
+      video_link,
     } = projectData;
     
     const updates = [];
@@ -311,6 +315,11 @@ const updateProject = async (id, projectData) => {
     if (priceFrom !== undefined) {
       updates.push(`precio = $${paramCounter++}`);
       params.push(priceFrom);
+    }
+
+    if (video_link !== undefined) {
+      updates.push(`enlace_video_proyecto = $${paramCounter++}`);
+      params.push(video_link);
     }
     
     if (updates.length > 0) {
