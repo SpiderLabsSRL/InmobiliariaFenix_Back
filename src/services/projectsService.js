@@ -16,6 +16,7 @@ const getProjects = async (filters = {}) => {
         p.unidades_totales,
         p.unidades_vendidas,
         p.precio,
+        p.enlace_video_proyecto,
         (
           SELECT json_agg(DISTINCT c.nombre)
           FROM proyecto_caracteristicas pc
@@ -66,7 +67,8 @@ const getProjects = async (filters = {}) => {
       soldUnits: row.unidades_vendidas,
       images: row.images || [],
       features: row.features || [],
-      priceFrom: parseFloat(row.precio)
+      priceFrom: parseFloat(row.precio),
+      video_link: row.enlace_video_proyecto,
     }));
     
     return projects;
@@ -91,6 +93,7 @@ const getProjectById = async (id) => {
         p.unidades_totales,
         p.unidades_vendidas,
         p.precio,
+        p.enlace_video_proyecto,
         (
           SELECT json_agg(DISTINCT c.nombre)
           FROM proyecto_caracteristicas pc
@@ -129,7 +132,8 @@ const getProjectById = async (id) => {
       soldUnits: row.unidades_vendidas,
       images: row.images || [],
       features: row.features || [],
-      priceFrom: parseFloat(row.precio)
+      priceFrom: parseFloat(row.precio),
+      video_link: row.enlace_video_proyecto,
     };
     
     return project;
