@@ -244,6 +244,12 @@ const getAllProperties = async (user, filters) => {
       paramCounter++;
     }
     
+    if (filters.esExclusivo) {
+      whereClauses.push(`i.es_exclusivo = $${paramCounter}`);
+      queryParams.push(filters.esExclusivo === 'only' ? true : false);
+      paramCounter++;
+    }
+    
     if (filters.tipoVenta) {
       whereClauses.push(`i.operacion = $${paramCounter}`);
       queryParams.push(filters.tipoVenta);
