@@ -8,6 +8,7 @@ const getAllProperties = async (req, res) => {
     tipoPropiedad,
     agenteId,
     tipoVenta,
+    esExclusivo,
     page = 1,
     limit = 10
   } = req.query;
@@ -18,6 +19,7 @@ const getAllProperties = async (req, res) => {
     tipoPropiedad: tipoPropiedad || null,
     agenteId: agenteId ? parseInt(agenteId) : null,
     tipoVenta: tipoVenta || null,
+    esExclusivo: esExclusivo,
     page: parseInt(page),
     limit: parseInt(limit)
   };
