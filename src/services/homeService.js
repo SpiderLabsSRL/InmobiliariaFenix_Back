@@ -600,7 +600,7 @@ const getAgentByPropertyId = async (propertyId) => {
         a.especializacion,
         a.rol,
         a.estado,
-        a.foto,
+        CONCAT('/agentes/photo/', a.idagente) as foto,
         a.porcentajeComision,
         a.idgrupo,
         g.nombre as grupo_nombre
@@ -646,18 +646,12 @@ const getAgentByPropertyId = async (propertyId) => {
       lastName: agent.apellido,
       email: agent.email,
       phone: agent.telefono,
-      photo: agent.foto ? agent.foto.toString('base64') : null,
+      photo: agent.foto,
       specialization: agent.especializacion,
       propertiesCount: parseInt(propertiesResult.rows[0].total),
-      role: agent.rol,
       active: agent.estado === 'activo',
-      ci: agent.ci,
-      address: agent.direccion,
       joinDate: new Date().toISOString(),
       capturedProperties: [],
-      groupId: agent.idgrupo,
-      groupName: agent.grupo_nombre,
-      porcentajeComision: agent.porcentajecomision,
       redesSociales: socialResult.rows.map(row => ({
         nombre: row.nombre,
         url: row.url
@@ -696,7 +690,7 @@ const getPropertyCoordinates = async (propertyId) => {
     }
 
     const row = result.rows[0];
-    const fullAddress = `${row.direccion}, ${row.municipio || ''}, ${row.provincia || ''}, ${row.departamento || ''}`;
+    const fullAddress = `${row.direccion}`;
 
     return {
       lat: row.latitud,
