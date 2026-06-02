@@ -11,8 +11,8 @@ router.get("/properties/count", homeController.getTotalPropertiesCount);
 router.get("/search", homeController.searchProperties);
 router.get("/cities", homeController.getCities);
 router.get("/zones", homeController.getZonesByCity);
-router.get("/properties/:id/agent", homeController.getAgentByPropertyId);
-router.get("/properties/:id/coordinates", homeController.getPropertyCoordinates);
+router.get("/properties/:propertyId/agent", homeController.getAgentByPropertyId);
+router.get("/properties/:propertyId/coordinates", homeController.getPropertyCoordinates);
 router.get("/agentes/:id", homeController.getAgentById);
 
 module.exports = router;
