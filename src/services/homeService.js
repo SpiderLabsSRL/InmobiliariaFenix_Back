@@ -569,12 +569,11 @@ const getZonesByCity = async (city) => {
     }
 
     const result = await query(
-      `SELECT m.nombre as zona
-       FROM municipio m
-       JOIN provincia p ON p.idprovincia = m.idprovincia
-       JOIN departamento d ON p.iddepartamento = p.iddepartamento
-       WHERE d.nombre ILIKE $1
-       ORDER BY m.nombre`,
+      `SELECT p.nombre as zona
+      FROM provincia p
+      JOIN departamento d ON d.iddepartamento = p.iddepartamento
+      WHERE d.nombre ILIKE $1
+      ORDER BY p.nombre`,
       [`%${city}%`]
     );
 
