@@ -160,12 +160,13 @@ const getFeaturedProperties = async (limit = 6) => {
         i.es_exclusivo,
         m.nombre as municipio,
         (
-          SELECT imagen 
-          FROM imagen_inmueble 
-          WHERE idinmueble = i.idinmueble 
-          AND es_principal = true 
-          LIMIT 1
-        ) as foto_principal
+          SELECT json_agg(
+            CONCAT('/inmuebles/', i.idinmueble, '/images/', ii.idimagen)
+            ORDER BY ii.orden
+          )
+          FROM imagen_inmueble ii
+          WHERE ii.idinmueble = i.idinmueble
+        ) as images
       FROM inmueble i
       LEFT JOIN municipio m ON i.idmunicipio = m.idmunicipio
       WHERE i.estado = 'activo'
@@ -186,7 +187,7 @@ const getFeaturedProperties = async (limit = 6) => {
       sqMeters: row.m2_construccion,
       bedrooms: row.nro_habitaciones,
       bathrooms: row.nro_baños,
-      images: row.foto_principal ? [row.foto_principal.toString('base64')] : [],
+      images: row.images || [],
       featured: row.es_exclusivo,
       lat: row.latitud,
       lng: row.longitud,
@@ -446,12 +447,13 @@ const searchProperties = async (params) => {
         i.es_exclusivo,
         m.nombre as municipio,
         (
-          SELECT imagen 
-          FROM imagen_inmueble 
-          WHERE idinmueble = i.idinmueble 
-          AND es_principal = true 
-          LIMIT 1
-        ) as foto_principal
+          SELECT json_agg(
+            CONCAT('/inmuebles/', i.idinmueble, '/images/', ii.idimagen)
+            ORDER BY ii.orden
+          )
+          FROM imagen_inmueble ii
+          WHERE ii.idinmueble = i.idinmueble
+        ) as images
       FROM inmueble i
       LEFT JOIN municipio m ON i.idmunicipio = m.idmunicipio
       WHERE i.estado = 'activo'
@@ -536,7 +538,7 @@ const searchProperties = async (params) => {
       bedrooms: row.nro_habitaciones,
       bathrooms: row.nro_baños,
       parkingSpots: row.nro_estacionamiento,
-      images: row.foto_principal ? [row.foto_principal.toString('base64')] : [],
+      images: row.images || [],
       featured: row.es_exclusivo,
       lat: row.latitud,
       lng: row.longitud
