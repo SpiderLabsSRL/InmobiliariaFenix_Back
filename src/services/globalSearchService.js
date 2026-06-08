@@ -56,7 +56,7 @@ const searchAll = async (filters) => {
       LEFT JOIN municipio m ON i.idmunicipio = m.idmunicipio
       LEFT JOIN provincia p ON m.idprovincia = p.idprovincia
       LEFT JOIN departamento d ON p.iddepartamento = d.iddepartamento
-      WHERE i.estado = 'activo' OR i.estado = 'reservado'
+      WHERE (i.estado = 'activo' OR i.estado = 'reservado') 
     `;
 
     const queryParams = [];
@@ -96,7 +96,7 @@ const searchAll = async (filters) => {
       }
 
       if (filters.department) {
-        propertiesQuery += ` AND m.nombre ILIKE $${paramCounter}`;
+        propertiesQuery += ` AND d.nombre ILIKE $${paramCounter}`;
         queryParams.push(`%${filters.department}%`);
         paramCounter++;
       }
