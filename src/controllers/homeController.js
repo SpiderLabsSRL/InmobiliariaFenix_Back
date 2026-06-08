@@ -158,6 +158,11 @@ const searchProperties = async (req, res) => {
       bedrooms: req.query.bedrooms ? parseInt(req.query.bedrooms) : undefined,
       bathrooms: req.query.bathrooms ? parseInt(req.query.bathrooms) : undefined,
       minSqm: req.query.minSqm ? parseFloat(req.query.minSqm) : undefined,
+      condition: req.query.condition,
+      hasGarage: req.query.hasGarage,
+      hasPool: req.query.hasPool,
+      hasTerrace: req.query.hasTerrace,
+      hasElevator: req.query.hasElevator,
       limit: req.query.limit ? parseInt(req.query.limit) : undefined
     };
 

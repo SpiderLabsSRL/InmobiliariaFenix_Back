@@ -439,13 +439,16 @@ const searchProperties = async (params) => {
         i.direccion,
         i.m2_construccion,
         i.nro_habitaciones,
+        i.condicion,
         i.nro_baños,
         i.nro_estacionamiento,
         i.precio_capatacion_s,
         i.latitud,
         i.longitud,
         i.es_exclusivo,
-        m.nombre as municipio,
+        m.nombre as city,
+        p.nombre as province,
+        d.nombre as department,
         (
           SELECT json_agg(
             CONCAT('/inmuebles/', i.idinmueble, '/images/', ii.idimagen)
@@ -456,6 +459,8 @@ const searchProperties = async (params) => {
         ) as images
       FROM inmueble i
       LEFT JOIN municipio m ON i.idmunicipio = m.idmunicipio
+      LEFT JOIN provincia p ON m.idprovincia = p.idprovincia
+      LEFT JOIN departamento d ON p.iddepartamento = d.iddepartamento
       WHERE i.estado = 'activo'
     `;
     
@@ -463,20 +468,23 @@ const searchProperties = async (params) => {
     let paramIndex = 1;
 
     if (params.city) {
-      queryText += ` AND m.nombre ILIKE $${paramIndex}`;
+      queryText += ` AND d.nombre ILIKE $${paramIndex}`;
       queryParams.push(`%${params.city}%`);
       paramIndex++;
     }
 
     if (params.zone) {
-      queryText += ` AND m.nombre ILIKE $${paramIndex}`;
+      queryText += ` AND p.nombre ILIKE $${paramIndex}`;
       queryParams.push(`%${params.zone}%`);
       paramIndex++;
     }
 
     if (params.operationType) {
       queryText += ` AND i.operacion = $${paramIndex}`;
-      queryParams.push(params.operationType);
+      if (params.operationType === 'anticretico')
+        queryParams.push('anticrético');
+      else
+        queryParams.push(params.operationType);
       paramIndex++;
     }
 
@@ -514,6 +522,31 @@ const searchProperties = async (params) => {
       queryText += ` AND i.m2_construccion >= $${paramIndex}`;
       queryParams.push(params.minSqm);
       paramIndex++;
+    }
+
+    if (params.condition) {
+      queryText += ` AND i.condicion = $${paramIndex}`;
+      if (params.condition === 'segunda_mano')
+        queryParams.push('segunda mano');
+      else
+        queryParams.push(params.condition);
+      paramIndex++;
+    }
+
+    if (params.hasGarage) {
+      queryText += ` AND i.garaje = true`;
+    }
+    
+    if (params.hasPool) {
+      queryText += ` AND i.piscina = true`;
+    }
+    
+    if (params.hasTerrace) {
+      queryText += ` AND i.terraza = true`;
+    }
+    
+    if (params.hasElevator) {
+      queryText += ` AND i.ascensor = true`;
     }
 
     queryText += ` ORDER BY i.fecha_creacion DESC`;
