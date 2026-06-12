@@ -80,7 +80,7 @@ const getPropertyById = async (id) => {
       id: property.idinmueble.toString(),
       title: property.titulo,
       description: property.descripcion,
-      price: property.precio_capatacion_s || property.precio_capatacion_m || 0,
+      price: property.precio_captacion_i || 0,
       idealPrice: property.precio_captacion_i,
       priceScale: {
         minimum: property.precio_capatacion_m || 0,
@@ -129,7 +129,7 @@ const getPropertyById = async (id) => {
       porcentajeComision: property.porcentajeComision,
       porcentajeCaptacion: property.porcentaje_captacion,
       porcentajeVenta: property.porcentaje_venta,
-      precio_m2_construccion: property.precio_capatacion_s / property.m2_construccion,
+      precio_m2_construccion: property.precio_captacion_i / property.m2_construccion,
       porcentaje_depreciacion: property.porcentajedepreciacion,
       esExclusivo: property.es_exclusivo,
       nombre_contacto_secundario: property.nombre_contacto_secundario,
@@ -154,7 +154,7 @@ const getFeaturedProperties = async (limit = 6) => {
         i.m2_construccion,
         i.nro_habitaciones,
         i.nro_baños,
-        i.precio_capatacion_s,
+        i.precio_captacion_i,
         i.latitud,
         i.longitud,
         i.es_exclusivo,
@@ -179,7 +179,7 @@ const getFeaturedProperties = async (limit = 6) => {
       id: row.idinmueble.toString(),
       title: row.titulo,
       description: row.descripcion,
-      price: row.precio_capatacion_s || 0,
+      price: row.precio_captacion_i || 0,
       type: row.operacion,
       propertyType: row.tipo_propiedad,
       city: row.municipio,
@@ -368,7 +368,7 @@ const getLatestProperties = async (limit = 6) => {
         i.m2_construccion,
         i.nro_habitaciones,
         i.nro_baños,
-        i.precio_capatacion_s,
+        i.precio_captacion_i,
         i.latitud,
         i.longitud,
         i.fecha_creacion,
@@ -392,7 +392,7 @@ const getLatestProperties = async (limit = 6) => {
       id: row.idinmueble.toString(),
       title: row.titulo,
       description: row.descripcion,
-      price: row.precio_capatacion_s || 0,
+      price: row.precio_captacion_i || 0,
       type: row.operacion,
       propertyType: row.tipo_propiedad,
       city: row.municipio,
@@ -442,7 +442,7 @@ const searchProperties = async (params) => {
         i.condicion,
         i.nro_baños,
         i.nro_estacionamiento,
-        i.precio_capatacion_s,
+        i.precio_captacion_i,
         i.latitud,
         i.longitud,
         i.es_exclusivo,
@@ -495,13 +495,13 @@ const searchProperties = async (params) => {
     }
 
     if (params.maxPrice) {
-      queryText += ` AND i.precio_capatacion_s <= $${paramIndex}`;
+      queryText += ` AND i.precio_captacion_i <= $${paramIndex}`;
       queryParams.push(params.maxPrice);
       paramIndex++;
     }
 
     if (params.minPrice) {
-      queryText += ` AND i.precio_capatacion_s >= $${paramIndex}`;
+      queryText += ` AND i.precio_captacion_i >= $${paramIndex}`;
       queryParams.push(params.minPrice);
       paramIndex++;
     }
@@ -562,7 +562,7 @@ const searchProperties = async (params) => {
       id: row.idinmueble.toString(),
       title: row.titulo,
       description: row.descripcion,
-      price: row.precio_capatacion_s || 0,
+      price: row.precio_captacion_i || 0,
       type: row.operacion,
       propertyType: row.tipo_propiedad,
       city: row.municipio,
