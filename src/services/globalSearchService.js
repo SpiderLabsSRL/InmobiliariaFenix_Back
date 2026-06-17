@@ -73,8 +73,6 @@ const searchAll = async (filters) => {
       if (filters.search) {
         propertiesQuery += ` AND (
           i.titulo ILIKE $${paramCounter} OR 
-          i.descripcion ILIKE $${paramCounter} OR 
-          i.direccion ILIKE $${paramCounter} OR
           m.nombre ILIKE $${paramCounter} OR
           p.nombre ILIKE $${paramCounter} OR
           d.nombre ILIKE $${paramCounter}
