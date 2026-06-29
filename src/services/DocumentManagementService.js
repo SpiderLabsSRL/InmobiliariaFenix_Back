@@ -380,6 +380,30 @@ Este es un mensaje automático del sistema de gestión de Inmobiliaria Fenix.
       throw error;
     }
   }
+
+  async expiringProperties() {
+    try {
+      const properties = await query(
+        `SELECT 
+          i.idinmueble,
+          i.titulo,
+          i.fecha_caducidad_captacion,
+          i.direccion,
+          a.nombre AS agente_nombre,
+          a.apellido AS agente_apellido
+        FROM inmueble i
+        INNER JOIN agente a ON i.idagente = a.idagente
+        WHERE i.estado = 'activo'
+          AND i.fecha_caducidad_captacion <= CURRENT_DATE + INTERVAL '1 month'
+        ORDER BY i.fecha_caducidad_captacion ASC;`
+      );
+      
+      return properties.rows;
+    } catch (error) {
+      console.error("Error in expiring Properties:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new DocumentManagementService();

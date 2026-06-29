@@ -118,6 +118,17 @@ class DocumentManagementController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  async expiringProperties(req, res) {
+    try {
+      const property = await documentManagementService.expiringProperties();
+      
+      res.json(property);
+    } catch (error) {
+      console.error("Error in expiringProperties:", error);
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
 
 module.exports = new DocumentManagementController();
