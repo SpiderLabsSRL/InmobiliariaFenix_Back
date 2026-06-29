@@ -54,5 +54,10 @@ router.get(
   "/propiedades-caducando",
   documentManagementController.expiringProperties
 );
+
+router.post(
+  "/enviar-alerta/:propertyId",
+  documentManagementController.enviarAlerta
+);
 router.get("/propiedad/:propertyId", documentManagementController.getPropertyById);
 module.exports = router;
