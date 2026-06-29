@@ -71,6 +71,9 @@ app.use("/api/projects", projectsRoutes);
 const homeRoutes = require("./src/routes/homeRoutes");
 app.use("/api/home", homeRoutes);
 
+const nuestrosClientesRoutes = require("./src/routes/nuestrosClientesRoutes");
+app.use("/api/clientes", nuestrosClientesRoutes);
+
 const sidebarRoutes = require("./src/routes/sidebarRoutes");
 app.use("/api/agentes", sidebarRoutes);
 
