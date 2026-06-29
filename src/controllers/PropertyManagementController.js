@@ -108,7 +108,7 @@ const savePropertyProgress = async (req, res) => {
   } catch (error) {
     console.error("Error in savePropertyProgress:", error);
     res.status(500).json({
-      error: "Error al guardar el progreso del inmueble",
+      error: error.message,
       details: error.message,
     });
   }
@@ -151,6 +151,11 @@ const updateProperty = async (req, res) => {
           return res.status(400).json({
             success: false,
             message: `Campo faltante: ${updatedProperty.campo}`,
+          });
+        case 'INVALID_DATE':
+          return res.status(400).json({
+            success: false,
+            message: updatedProperty.message,
           });
       }
     }

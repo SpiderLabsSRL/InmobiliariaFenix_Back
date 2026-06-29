@@ -110,6 +110,21 @@ const validateYearBuilt = (year) => {
   return null;
 };
 
+const validateExpiredDate = (date) => {
+  if (!date) return false;
+  
+  const fechaIngresada = new Date(date);
+  
+  if (isNaN(fechaIngresada.getTime())) {
+    return false; // Fecha inválida
+  }
+  
+  const fechaActual = new Date();
+  fechaActual.setHours(0, 0, 0, 0);
+  
+  return fechaIngresada > fechaActual;
+};
+
 const validarCamposRequeridos = (data) => {
     const camposValidacion = {
         string: ['titulo', 'descripcion', 'operacion', 'tipo_propiedad', 'condicion', 
@@ -429,6 +444,7 @@ const savePropertyProgress = async (propertyData, documents = null) => {
     es_exclusivo,
     precio_m2_construccion,
     porcentaje_depreciacion,
+    fecha_caducidad_captacion,
   } = propertyData;
 
   const validatedTipoPropiedad = validatePropertyType(tipo_propiedad);
@@ -437,6 +453,14 @@ const savePropertyProgress = async (propertyData, documents = null) => {
   const validatedEstado = validateStatus(estado);
   
   const validYear = validateYearBuilt(año_construccion);
+  let validFechaCaducidad = null;
+  if (fecha_caducidad_captacion){
+    validFechaCaducidad = validateExpiredDate(fecha_caducidad_captacion);
+  
+    if (!validFechaCaducidad) {
+      throw new Error("La fecha de caducidad tiene que ser posterior a la actual");
+    }
+  }
 
   if (!idagente) {
     throw new Error("El ID del agente es obligatorio");
@@ -460,8 +484,8 @@ const savePropertyProgress = async (propertyData, documents = null) => {
         porcentajeComision, precio_metro_construccion,
         porcentajeDepreciacion, celular_contacto_secundario,
         nombre_contacto_secundario, porcentaje_captacion, porcentaje_venta,
-        es_exclusivo, fecha_creacion
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, TIMEZONE('America/La_Paz', NOW()))
+        es_exclusivo, fecha_caducidad_captacion, fecha_creacion
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, TIMEZONE('America/La_Paz', NOW()))
       RETURNING *`,
       [
         titulo || "",
@@ -502,6 +526,7 @@ const savePropertyProgress = async (propertyData, documents = null) => {
         porcentaje_captacion,
         porcentaje_venta,
         es_exclusivo,
+        fecha_caducidad_captacion,
       ],
     );
 
@@ -515,7 +540,7 @@ const savePropertyProgress = async (propertyData, documents = null) => {
     return propertyWithAgent;
   } catch (error) {
     console.error("Error en savePropertyProgress SQL:", error);
-    throw error;
+    throw new Error("Error al guardar el inmueble");
   }
 };
 
@@ -558,6 +583,7 @@ const updateProperty = async (id, propertyData, documents = null) => {
     porcentaje_captacion,
     porcentaje_venta,
     es_exclusivo,
+    fecha_caducidad_captacion,
   } = propertyData;
 
   const validatedTipoPropiedad = validatePropertyType(tipo_propiedad);
@@ -566,6 +592,12 @@ const updateProperty = async (id, propertyData, documents = null) => {
   const validatedEstado = validateStatus(estado);
   
   const validYear = validateYearBuilt(año_construccion);
+
+  const validFechaCaducidad = validateExpiredDate(fecha_caducidad_captacion);
+
+  if (!validFechaCaducidad) {
+    return { error: 'INVALID_DATE', message: 'La fecha debe ser posterior a la fecha actual'};
+  }
 
   const validLatitud =
     latitud && !isNaN(parseFloat(latitud)) ? parseFloat(latitud) : -17.3895;
@@ -618,8 +650,9 @@ const updateProperty = async (id, propertyData, documents = null) => {
         nombre_contacto_secundario = $34,
         porcentaje_captacion = $35,
         porcentaje_venta = $36,
-        es_exclusivo = $37
-      WHERE idinmueble = $38
+        es_exclusivo = $37,
+        fecha_caducidad_captacion = $38
+      WHERE idinmueble = $39
       RETURNING *`,
       [
         titulo || "",
@@ -659,6 +692,7 @@ const updateProperty = async (id, propertyData, documents = null) => {
         porcentaje_captacion,
         porcentaje_venta,
         es_exclusivo,
+        fecha_caducidad_captacion,
         id,
       ],
     );
