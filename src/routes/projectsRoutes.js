@@ -7,7 +7,7 @@ router.get("/", authenticate, projectsController.getProjects);
 router.get("/ownership/:ownership", authenticate, projectsController.getProjectsByOwnership);
 router.get("/features", authenticate, projectsController.getFeatures);
 router.post("/features", authenticate, projectsController.createFeature);
-router.get("/:id", authenticate, projectsController.getProjectById);
+router.get("/:id", projectsController.getProjectById);
 router.post("/", authenticate, projectsController.createProject);
 router.put("/:id", authenticate, projectsController.updateProject);
 router.delete("/:id", authenticate, projectsController.deleteProject);
