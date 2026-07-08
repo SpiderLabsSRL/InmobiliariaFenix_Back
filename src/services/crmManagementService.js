@@ -940,6 +940,342 @@ const getNegotiationHistory = async (offerId, propertyId, user) => {
   }
 };
 
+const generateOfferEmail = async (offerId, propertyId, user) => {
+  try {
+    const offerResult = await query(
+      `
+      SELECT 
+        o.idoferta as id,
+        o.idinmueble as "propertyId",
+        o.monto_oferta as amount,
+        o.nombre_ofertante as "offeredBy",
+        o.idagente_responsable as "agentResponsible",
+        o.estado as status,
+        o.idoferta_padre as "originalOfferId"
+      FROM oferta_inmueble o
+      WHERE o.idoferta = $1
+      `,
+      [offerId]
+    );
+
+    if (offerResult.rows.length === 0) {
+      throw new Error('Oferta no encontrada');
+    }
+
+    const offer = offerResult.rows[0];
+
+    const propertyResult = await query(
+      `
+      SELECT 
+        i.idinmueble as id,
+        i.titulo,
+        i.idagente as "agentId",
+        a.nombre || ' ' || a.apellido as "agentName",
+        a.email as "agentEmail"
+      FROM inmueble i
+      LEFT JOIN agente a ON i.idagente = a.idagente
+      WHERE i.idinmueble = $1
+      `,
+      [propertyId]
+    );
+
+    if (propertyResult.rows.length === 0) {
+      throw new Error('Propiedad no encontrada');
+    }
+
+    const property = propertyResult.rows[0];
+
+    const isCounterOffer = offer.originalOfferId !== null;
+
+    if (isCounterOffer) {
+      return await generateCounterOfferEmail(property, offer, user);
+    } else {
+      return await generateNewOfferEmail(property, offer, user);
+    }
+
+  } catch (error) {
+    console.error("Error en generateOfferEmail:", error);
+    throw error;
+  }
+};
+
+const generateNewOfferEmail = async (property, offer, user) => {
+  const baseUrl = process.env.APP_URL || 'https://inmobiliaria-fenix.netlify.app';
+  const propertyUrl = `${baseUrl}/inmuebles/${property.id}`;
+  
+  // Obtener todos los agentes activos
+  const agentEmails = await getActiveAgentEmails(user);
+  
+  if (agentEmails.length === 0) {
+    return { 
+      success: false, 
+      message: 'No hay agentes activos disponibles' 
+    };
+  }
+
+  const emailList = agentEmails.join(', ');
+  
+  const subject = encodeURIComponent(
+    `Nueva Oferta en la propiedad: ${property.titulo}`
+  );
+  
+  const emailBody = `
+Hola,
+
+Se ha registrado una nueva oferta en el sistema:
+
+📌 Propiedad: "${property.titulo}"
+💰 Monto: ${offer.amount} USD
+👤 Ofertante: ${offer.offeredBy}
+📅 Fecha: ${new Date().toLocaleDateString('es-BO', { timeZone: 'America/La_Paz' })}
+
+Te invitamos a revisar los detalles de esta oferta iniciando sesión en el sistema:
+
+🔍 Ver Propiedad: ${propertyUrl}
+
+---
+Este es un mensaje automático del sistema de gestión de Inmobiliaria Fenix.
+  `.trim();
+  
+  const body = encodeURIComponent(emailBody);
+  
+  const mailtoUrl = `mailto:${emailList}?subject=${subject}&body=${body}`;
+  
+  let gmailComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailList)}&su=${subject}&body=${body}`;
+  
+  return {
+    success: true,
+    emailData: {
+      mailtoUrl,
+      gmailComposeUrl
+    },
+    propertyTitle: property.titulo,
+    message: `Correo preparado para ${agentEmails.length} agente(s)`
+  };
+};
+
+const generateCounterOfferEmail = async (property, offer, user) => {
+  const baseUrl = process.env.APP_URL || 'https://inmobiliaria-fenix.netlify.app';
+  const propertyUrl = `${baseUrl}/inmuebles/${property.id}`;
+  
+  const agentsResult = await query(
+    `
+    SELECT DISTINCT 
+      o.idagente_responsable as "agentResponsible",
+      a.email,
+      a.nombre || ' ' || a.apellido as "agentName"
+    FROM oferta_inmueble o
+    LEFT JOIN agente a ON o.idagente_responsable = a.idagente
+    WHERE (o.idoferta = $1 OR o.idoferta_padre = $1)
+      AND o.idagente_responsable != $2
+    `,
+    [offer.originalOfferId, user.idagente]
+  );
+
+  if (agentsResult.rows.length === 0) {
+    return { 
+      success: false, 
+      message: 'No se encontró el agente destinatario de la contraoferta' 
+    };
+  }
+
+  const otherAgent = agentsResult.rows[0];
+  
+  if (!otherAgent.email) {
+    return { 
+      success: false, 
+      message: 'El agente destino no tiene email configurado' 
+    };
+  }
+
+  if (otherAgent.email === user.email) {
+    return {
+      success: true,
+      emailData: {
+        mailtoUrl: null,
+        gmailComposeUrl: null,
+      },
+      message: 'El agente destino es el mismo agente'
+    }
+  }
+
+  const subject = encodeURIComponent(
+    `Nueva Contraoferta en la propiedad: ${property.titulo}`
+  );
+  
+  const emailBody = `
+Hola ${otherAgent.agentName || 'Agente'},
+
+Se ha registrado una contraoferta en el sistema:
+
+📌 Propiedad: "${property.titulo}"
+💰 Monto de contraoferta: ${offer.amount} USD
+👤 Ofertante original: ${offer.offeredBy}
+📅 Fecha de contraoferta: ${new Date().toLocaleDateString('es-BO', { timeZone: 'America/La_Paz' })}
+
+Te invitamos a revisar los detalles de esta contraoferta iniciando sesión en el sistema:
+
+🔍 Ver Propiedad: ${propertyUrl}
+
+---
+Este es un mensaje automático del sistema de gestión de Inmobiliaria Fenix.
+  `.trim();
+  
+  const body = encodeURIComponent(emailBody);
+  
+  const mailtoUrl = `mailto:${otherAgent.email}?subject=${subject}&body=${body}`;
+  const gmailComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(otherAgent.email)}&su=${subject}&body=${body}`;
+  
+  return {
+    success: true,
+    emailData: {
+      mailtoUrl,
+      gmailComposeUrl,
+    },
+    propertyTitle: property.titulo,
+    message: `Correo de contraoferta preparado para ${otherAgent.agentName || 'el agente'}`
+  };
+};
+
+const generateRejectionEmail = async (offerId, propertyId, user) => {
+  try {
+    const offerResult = await query(
+      `
+      SELECT 
+        o.idoferta as id,
+        o.idinmueble as "propertyId",
+        o.monto_oferta as amount,
+        o.nombre_ofertante as "offeredBy",
+        o.idagente_responsable as "agentResponsible",
+        o.estado as status,
+        o.idoferta_padre as "originalOfferId",
+        o.motivo_rechazo as "declineReason",
+        a.email as "agentEmail",
+        a.nombre || ' ' || a.apellido as "agentName"
+      FROM oferta_inmueble o
+      LEFT JOIN agente a ON o.idagente_responsable = a.idagente
+      WHERE o.idoferta = $1
+      `,
+      [offerId]
+    );
+
+    if (offerResult.rows.length === 0) {
+      throw new Error('Oferta no encontrada');
+    }
+
+    const offer = offerResult.rows[0];
+
+    const propertyResult = await query(
+      `
+      SELECT 
+        i.titulo,
+        i.idagente as "agentId"
+      FROM inmueble i
+      WHERE i.idinmueble = $1
+      `,
+      [propertyId]
+    );
+
+    if (propertyResult.rows.length === 0) {
+      throw new Error('Propiedad no encontrada');
+    }
+
+    const property = propertyResult.rows[0];
+
+    // El destinatario es el agente responsable de la oferta que se está rechazando
+    const recipientEmail = offer.agentEmail;
+    const recipientName = offer.agentName;
+    
+    if (!recipientEmail) {
+      return { 
+        success: false, 
+        message: 'El agente destinatario no tiene email configurado' 
+      };
+    }
+
+    if (recipientEmail === user.email) {
+      return {
+        success: true,
+        emailData: {
+          mailtoUrl: null,
+          gmailComposeUrl: null,
+        },
+        message: 'El agente destino es el mismo agente'
+      }
+    }
+
+    const baseUrl = process.env.APP_URL || 'https://inmobiliaria-fenix.netlify.app';
+    const propertyUrl = `${baseUrl}/inmuebles/${property.id}`;
+
+    const isCounterOffer = offer.originalOfferId !== null;
+
+    const subject = encodeURIComponent(
+      isCounterOffer 
+        ? `Contraoferta rechazada en la propiedad: ${property.titulo}`
+        : `Oferta rechazada en la propiedad: ${property.titulo}`
+    );
+    
+    const emailBody = `
+Hola ${recipientName || 'Agente'},
+
+Su ${isCounterOffer ? 'contraoferta' : 'oferta'} ha sido rechazada:
+
+📌 Propiedad: "${property.titulo}"
+💰 Monto ofertado: ${offer.amount} USD
+👤 Ofertante: ${offer.offeredBy}
+📅 Fecha de rechazo: ${new Date().toLocaleDateString('es-BO', { timeZone: 'America/La_Paz' })}
+📝 Motivo del rechazo: ${offer.declineReason || 'No especificado'}
+
+Puede revisar los detalles en el sistema:
+
+🔍 Ver Propiedad: ${propertyUrl}
+
+---
+Este es un mensaje automático del sistema de gestión de Inmobiliaria Fenix.
+    `.trim();
+    
+    const body = encodeURIComponent(emailBody);
+    
+    const mailtoUrl = `mailto:${recipientEmail}?subject=${subject}&body=${body}`;
+    const gmailComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(recipientEmail)}&su=${subject}&body=${body}`;
+    
+    return {
+      success: true,
+      emailData: {
+        mailtoUrl,
+        gmailComposeUrl,
+      },
+      propertyTitle: property.titulo,
+      message: `Correo de rechazo preparado para ${recipientName || 'el agente'}`
+    };
+
+  } catch (error) {
+    console.error("Error en generateRejectionEmail:", error);
+    throw error;
+  }
+};
+
+const getActiveAgentEmails = async (user) => {
+  try {
+    const result = await query(
+      `
+      SELECT email 
+      FROM agente 
+      WHERE estado = 'activo' 
+        AND email IS NOT NULL 
+        AND email != ''
+        AND email != $1
+      `, [user.email]
+    );
+    
+    return result.rows.map(row => row.email);
+  } catch (error) {
+    console.error("Error en getActiveAgentEmails:", error);
+    return [];
+  }
+};
+
+// Exportar funciones
 module.exports = {
   getProperties,
   getPropertyById,
@@ -949,4 +1285,7 @@ module.exports = {
   updateOfferStatus,
   getAgentById,
   getNegotiationHistory,
+  generateOfferEmail,
+  generateRejectionEmail,
+  getActiveAgentEmails
 };

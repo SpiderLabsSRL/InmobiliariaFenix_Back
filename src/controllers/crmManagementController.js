@@ -332,6 +332,106 @@ const getNegotiationHistory = async (req, res) => {
   }
 };
 
+const getOfferEmail = async (req, res) => {
+  try {
+    const { offerId, propertyId } = req.params;
+    const user = req.user;
+
+    // Validaciones de parámetros
+    if (!offerId || !propertyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Se requiere offerId y propertyId"
+      });
+    }
+
+    // Validar que sean números válidos
+    if (isNaN(offerId) || isNaN(propertyId)) {
+      return res.status(400).json({
+        success: false,
+        message: "offerId y propertyId deben ser números válidos"
+      });
+    }
+
+    const offerEmail = await crmManagementService.generateOfferEmail(
+      parseInt(offerId),
+      parseInt(propertyId),
+      user
+    );
+
+    if (!offerEmail) {
+      return res.status(404).json({
+        success: false,
+        message: "No se encontró el historial de negociaciones"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: offerEmail
+    });
+
+  } catch (error) {
+    console.error("Error en getOfferEmail:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    });
+  }
+};
+
+const getRejectionEmail = async (req, res) => {
+  try {
+    const { offerId, propertyId } = req.params;
+    const user = req.user;
+
+    // Validaciones de parámetros
+    if (!offerId || !propertyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Se requiere offerId y propertyId"
+      });
+    }
+
+    // Validar que sean números válidos
+    if (isNaN(offerId) || isNaN(propertyId)) {
+      return res.status(400).json({
+        success: false,
+        message: "offerId y propertyId deben ser números válidos"
+      });
+    }
+
+    const offerEmail = await crmManagementService.generateRejectionEmail(
+      parseInt(offerId),
+      parseInt(propertyId),
+      user
+    );
+
+    if (!offerEmail) {
+      return res.status(404).json({
+        success: false,
+        message: "No se encontró el historial de negociaciones"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: offerEmail
+    });
+
+  } catch (error) {
+    console.error("Error en generateRejectionEmail:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Error interno del servidor",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    });
+  }
+};
+
 module.exports = {
   getProperties,
   getPropertyById,
@@ -340,5 +440,7 @@ module.exports = {
   createOffer,
   updateOfferStatus,
   getAgentById,
-  getNegotiationHistory
+  getNegotiationHistory,
+  getOfferEmail,
+  getRejectionEmail,
 };

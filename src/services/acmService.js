@@ -111,7 +111,7 @@ const getZonesByMunicipio = async (idmunicipio) => {
     CROSS JOIN cuadrante_geom c
 
     ORDER BY distancia_metros ASC
-    LIMIT 20;
+    LIMIT 50;
   `;
 
   const result = await query(sql, [idmunicipio]);
@@ -151,14 +151,6 @@ const CONSTRUCTION_PRICES = {
   'lujo': 1000,
 };
 
-const CONDITION_DEPRECIATION = {
-  'excelente': { min: 0, max: 15, average: 7.5 },
-  'bueno': { min: 10, max: 15, average: 12.5 },
-  'regular': { min: 20, max: 30, average: 25 },
-  'malo': { min: 40, max: 50, average: 45 },
-  'ruinoso': { min: 60, max: 80, average: 70 },
-};
-
 const OPTIONAL_MULTIPLIERS = {
   hasElevator: 1.05,
   hasGarage: 1.08,
@@ -180,16 +172,24 @@ const getConstructionTypeLabel = (type) => {
   return labels[type] || type;
 };
 
-const getConditionLabel = (condition) => {
-  const labels = {
-    'excelente': 'Excelente',
-    'bueno': 'Bueno',
-    'regular': 'Regular',
-    'malo': 'Malo',
-    'ruinoso': 'Ruinoso'
-  };
-  return labels[condition] || condition;
+const getConditionLabel = (depreciation) => {
+  if (depreciation <= 7.5) return 'Excelente';
+  else if (depreciation <= 12.5) return 'Bueno';
+  else if (depreciation <= 25) return 'Regular';
+  else if (depreciation <= 30) return 'Malo';
+  else return 'Ruinoso';
 };
+
+const createSquareAroundCenter = (lat, lng) => {
+  const halfSide = 0.0045;
+  
+  const northWest = [lat + halfSide, lng - halfSide];
+  const northEast = [lat + halfSide, lng + halfSide];
+  const southEast = [lat - halfSide, lng + halfSide];
+  const southWest = [lat - halfSide, lng - halfSide];
+  
+  return [northWest, northEast, southEast, southWest];
+}
 
 const getComparableProperties = async (property, selectedZone, finalValue) => {
   const points = selectedZone.points;
@@ -277,109 +277,48 @@ const getComparableProperties = async (property, selectedZone, finalValue) => {
 };
 
 const calculateValue = async (property, options = {}) => {
-  const { sqMetersLand, sqMeters, zoneId, constructionType, condition } = property;
+  const { sqMetersLand, sqMeters, zoneId, constructionType, yearBuilt } = property;
   
   let selectedZone = null;
   if (zoneId) {
     selectedZone = await cuadrantesService.getCuadranteById(zoneId);
+  } else {
+    selectedZone = {
+        name: `Zona Alrededor de la propiedad}`,
+        points: createSquareAroundCenter(property.lat, property.lng),
+        price: property.precio_m2_sugerido,
+      };
   }
   
-  const zonePrice = selectedZone?.price || 300;
+  const zonePrice = selectedZone?.price;
   const zoneConstructionPrice = selectedZone?.precio_construccion || CONSTRUCTION_PRICES[constructionType];
   const baseConstructionPrice = CONSTRUCTION_PRICES[constructionType];
   
   const constructionValue = zoneConstructionPrice * sqMeters;
   const landValue = zonePrice * sqMetersLand;
   
-  const depreciation = CONDITION_DEPRECIATION[condition];
-  const depreciationPercentage = depreciation.average / 100;
+  const currentYear = new Date().getFullYear();
+  const yearsOld = Math.max(0, currentYear - yearBuilt);
+  const depreciation = Math.min(95, yearsOld * 2.5);
+
+  const depreciationPercentage = depreciation / 100;
   const depreciationValue = constructionValue * depreciationPercentage;
   
   const baseValue = landValue + (constructionValue - depreciationValue);
   
-  let optionalMultiplier = 1;
-  const optionalFactors = [];
-  
-  const floors = property.numberOfFloors || 1;
-  if (floors > 1) {
-    const floorBonus = 1 + ((floors - 1) * (OPTIONAL_MULTIPLIERS.extraFloor - 1));
-    optionalMultiplier *= floorBonus;
-    optionalFactors.push({
-      label: 'Pisos adicionales',
-      value: `${floors} pisos`,
-      impact: `+${((floorBonus - 1) * 100).toFixed(0)}%`,
-    });
-  }
-  
-  const bedrooms = property.bedrooms || 2;
-  if (bedrooms > 2) {
-    const bedroomBonus = 1 + ((bedrooms - 2) * (OPTIONAL_MULTIPLIERS.extraBedroom - 1));
-    optionalMultiplier *= bedroomBonus;
-    optionalFactors.push({
-      label: 'Habitaciones extra',
-      value: `${bedrooms} hab.`,
-      impact: `+${((bedroomBonus - 1) * 100).toFixed(0)}%`,
-    });
-  }
-  
-  const bathrooms = property.bathrooms || 1;
-  if (bathrooms > 1) {
-    const bathroomBonus = 1 + ((bathrooms - 1) * (OPTIONAL_MULTIPLIERS.extraBathroom - 1));
-    optionalMultiplier *= bathroomBonus;
-    optionalFactors.push({
-      label: 'Baños extra',
-      value: `${bathrooms} baños`,
-      impact: `+${((bathroomBonus - 1) * 100).toFixed(0)}%`,
-    });
-  }
-  
-  const parking = property.parkingSpots || 1;
-  if (parking > 1) {
-    const parkingBonus = 1 + ((parking - 1) * (OPTIONAL_MULTIPLIERS.extraParking - 1));
-    optionalMultiplier *= parkingBonus;
-    optionalFactors.push({
-      label: 'Estacionamientos extra',
-      value: `${parking} est.`,
-      impact: `+${((parkingBonus - 1) * 100).toFixed(0)}%`,
-    });
-  }
-  
-  const specialFeatures = [
-    { key: 'hasElevator', label: 'Ascensor', multiplier: OPTIONAL_MULTIPLIERS.hasElevator },
-    { key: 'hasGarage', label: 'Garaje', multiplier: OPTIONAL_MULTIPLIERS.hasGarage },
-    { key: 'hasTerrace', label: 'Terraza', multiplier: OPTIONAL_MULTIPLIERS.hasTerrace },
-    { key: 'hasPool', label: 'Piscina', multiplier: OPTIONAL_MULTIPLIERS.hasPool },
-  ];
-  
-  specialFeatures.forEach(feature => {
-    if (property[feature.key]) {
-      optionalMultiplier *= feature.multiplier;
-      optionalFactors.push({
-        label: feature.label,
-        value: 'Sí',
-        impact: `+${((feature.multiplier - 1) * 100).toFixed(0)}%`,
-      });
-    }
-  });
-  
-  const finalValue = baseValue * optionalMultiplier;
+  const finalValue = baseValue;
   const pricePerSqm = finalValue / sqMeters;
   
   // Construir factores
   const factors = [
-    { label: 'Departamento', value: property.department, impact: 'base', details: 'Ubicación geográfica' },
-    { label: 'Provincia', value: property.province, impact: 'base', details: 'Ubicación geográfica' },
-    { label: 'Municipio', value: property.municipality, impact: 'base', details: 'Ubicación geográfica' },
-    { label: 'Zona/Cuadrante', value: selectedZone?.name || property.zoneName || 'No seleccionado', impact: 'base', details: selectedZone ? `Precio terreno: $${zonePrice}/m², Construcción: $${zoneConstructionPrice}/m²` : 'Seleccione una zona en el mapa' },
-    { label: 'm² Construcción', value: `${sqMeters} m²`, impact: `$${zoneConstructionPrice.toLocaleString()}/m²`, details: `Precio base por zona` },
-    { label: 'm² Terreno', value: `${sqMetersLand} m²`, impact: `$${zonePrice.toLocaleString()}/m²`, details: `Valor terreno: ${((landValue / (landValue + constructionValue)) * 100).toFixed(0)}% del total` },
+    { label: 'm² Construcción', value: `${sqMeters} m²`, impact: `$${zoneConstructionPrice}/m²`, details: `Precio base por zona` },
+    { label: 'm² Terreno', value: `${sqMetersLand} m²`, impact: `$${zonePrice}/m²`, details: `Valor terreno: ${((landValue / (landValue + constructionValue)) * 100).toFixed(0)}% del total` },
     { label: 'Tipo Construcción', value: getConstructionTypeLabel(constructionType), impact: `$${baseConstructionPrice}/m²`, details: `Categoría: ${constructionType}` },
-    { label: 'Condición', value: getConditionLabel(condition), impact: `-${depreciationPercentage * 100}%`, details: `Depreciación: ${depreciation.average}% (rango ${depreciation.min}-${depreciation.max}%)` },
-    { label: 'Valor Terreno', value: `$${Math.round(landValue).toLocaleString()}`, impact: `${((landValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMetersLand} m² × $${zonePrice}/m²` },
-    { label: 'Valor Construcción', value: `$${Math.round(constructionValue).toLocaleString()}`, impact: `${((constructionValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMeters} m² × $${zoneConstructionPrice}/m²` },
-    { label: 'Depreciación', value: `-$${Math.round(depreciationValue).toLocaleString()}`, impact: `-${depreciationPercentage * 100}%`, details: `Por condición: ${condition}` },
-    ...optionalFactors.map(f => ({ label: f.label, value: f.value, impact: f.impact, details: 'Multiplicador opcional' })),
-    { label: 'Valor Final Estimado', value: `$${Math.round(finalValue).toLocaleString()}`, impact: `${pricePerSqm.toLocaleString()}/m²`, details: `Precio por metro cuadrado construido` },
+    { label: 'Condición', value: getConditionLabel(depreciation), impact: `-${depreciationPercentage * 100}%`, details: `Depreciación: ${depreciation}%` },
+    { label: 'Valor Terreno', value: `$${Math.round(landValue)}`, impact: `${((landValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMetersLand} m² × $${zonePrice}/m²` },
+    { label: 'Valor Construcción', value: `$${Math.round(constructionValue)}`, impact: `${((constructionValue / finalValue) * 100).toFixed(0)}% del total`, details: `${sqMeters} m² × $${zoneConstructionPrice}/m²` },
+    { label: 'Depreciación', value: `-$${Math.round(depreciationValue)}`, impact: `-${depreciationPercentage * 100}%`, details: `Por condición: ${getConditionLabel(depreciation)}` },
+    { label: 'Valor Final Estimado', value: `$${Math.round(finalValue)}`, impact: `${pricePerSqm}/m²`, details: `Precio por metro cuadrado construido` },
   ];
   
   // Margen de porcentaje
@@ -398,6 +337,7 @@ const calculateValue = async (property, options = {}) => {
     landValue: Math.round(landValue),
     constructionValue: Math.round(constructionValue),
     depreciationValue: Math.round(depreciationValue),
+    depreciationPercentage: depreciation,
     finalValue: Math.round(finalValue),
     pricePerSqm: Math.round(pricePerSqm),
     marginLow,

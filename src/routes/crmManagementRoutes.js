@@ -18,6 +18,17 @@ router.get(
   crmManagementController.getNegotiationHistory
 );
 
+router.get(
+  "/offer-email/:offerId/:propertyId", 
+  authenticate, 
+  crmManagementController.getOfferEmail
+);
+router.get(
+  "/rejection-email/:offerId/:propertyId", 
+  authenticate, 
+  crmManagementController.getRejectionEmail
+);
+
 // Agentes
 router.get("/agents/:id", authenticate, crmManagementController.getAgentById);
 

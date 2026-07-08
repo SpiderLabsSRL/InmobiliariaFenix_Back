@@ -380,6 +380,110 @@ Este es un mensaje automático del sistema de gestión de Inmobiliaria Fenix.
       throw error;
     }
   }
+
+  async expiringProperties() {
+    try {
+      const properties = await query(
+        `SELECT 
+          i.idinmueble,
+          i.titulo,
+          i.fecha_caducidad_captacion,
+          i.direccion,
+          a.nombre AS agente_nombre,
+          a.apellido AS agente_apellido
+        FROM inmueble i
+        INNER JOIN agente a ON i.idagente = a.idagente
+        WHERE i.estado = 'activo'
+          AND i.fecha_caducidad_captacion <= CURRENT_DATE + INTERVAL '1 month'
+        ORDER BY i.fecha_caducidad_captacion ASC;`
+      );
+      
+      return properties.rows;
+    } catch (error) {
+      console.error("Error in expiring Properties:", error);
+      throw error;
+    }
+  }
+
+  async generateGmailExpiringPropertyUrl(propertyId, propertyTitle, agenteEmail) {
+    const baseUrl = process.env.APP_URL || 'https://inmobiliriafenix.netlify.app';
+    const propertyUrl = `${baseUrl}/inmuebles`;
+    
+    // Construir el cuerpo del correo en texto plano (para mailto:)
+    const subject = encodeURIComponent(`El inmueble esta por vencer: ${propertyTitle}`);
+    
+    const emailBody = `
+Hola,
+
+Tenemos una PROPIEDAD que esta proxima a vencer en el sistema:
+
+"📌 ${propertyTitle}"
+
+✅ Estado: Aprobada y activa
+
+Te invitamos a revisar los detalles de esta propiedad iniciando sesión en el sistema:
+
+🔍 Ver Listado de Inmuebles: ${propertyUrl}
+
+---
+Este es un mensaje automático del sistema de gestión de Inmobiliaria Fenix.
+    `.trim();
+    
+    const body = encodeURIComponent(emailBody);
+    
+    const email = agenteEmail;
+    
+    // Construir URL mailto: para abrir en Gmail (si el usuario tiene Gmail como predeterminado)
+    // O usar el enlace directo de Gmail
+    const mailtoUrl = `mailto:${email}?subject=${subject}&body=${body}`;
+    
+    // También generar URL directa de Gmail Web
+    const gmailComposeUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${subject}&body=${body}`;
+    
+    return {
+      mailtoUrl,
+      gmailComposeUrl,
+    };
+  }
+
+  async enviarAlerta(propertyId) {
+    try {
+      const sql = `
+        SELECT 
+          i.idinmueble,
+          i.titulo,
+          a.nombre,
+          a.apellido,
+          a.email,
+          a.idagente
+        FROM inmueble i
+        LEFT JOIN agente a ON i.idagente = a.idagente
+        WHERE i.idinmueble = $1
+      `;
+      
+      const result = await query(sql, [propertyId]);
+      
+      if (result.rows.length === 0) {
+        throw new Error("Propiedad no encontrada");
+      }
+
+      const property = result.rows[0];
+
+      const emailData = await this.generateGmailExpiringPropertyUrl(property.idinmueble, property.titulo, property.email);
+      
+      // Retornar la información para que el frontend abra Gmail
+      return { 
+        success: true,
+        emailData: emailData,
+        propertyTitle: property.titulo,
+        message: emailData ? `Correo preparado para un destinatario` : 'No hay destinatario disponible'
+      };
+      
+    } catch (error) {
+      console.error("Error in enviarAlerta:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new DocumentManagementService();
