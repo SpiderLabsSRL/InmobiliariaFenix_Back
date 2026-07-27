@@ -7,6 +7,7 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:8080",
   "https://inmobiliaria-fenix.netlify.app",
+  "inmobiliaria-fenix.spiderlabsystems.com",
   "https://inmobiliariafenix-back.onrender.com",
 ];
 
